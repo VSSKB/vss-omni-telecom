@@ -1,0 +1,13 @@
+{
+  "name": "backend-placeholder",
+  "version": "1.0.0",
+  "description": "Placeholder for VSS Backend",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {}
+}

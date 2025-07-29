@@ -1,0 +1,72 @@
+import React, { useState, useEffect } from 'react';
+import './App.css';
+import DependenciesCheckPage from './DependenciesCheckPage';
+import CreateProjectPage from './CreateProjectPage';
+import HomePage from './HomePage'; // Убедитесь, что эти импорты верны для вашего проекта
+import ProjectDetailsPage from './ProjectDetailsPage'; // Добавлен для полноты
+
+function App() {
+    // Определяем состояние для текущего шага мастера установки
+    // Изначально можно установить на 'dependenciesCheck', а потом принудительно переключить
+    const [wizardStep, setWizardStep] = useState('dependenciesCheck'); 
+
+    // useEffect для принудительного перехода на следующий шаг
+    useEffect(() => {
+        // Эта функция будет вызвана через короткое время после загрузки App.js
+        // Она принудительно переключит wizardStep на 'createProject' (или любой другой следующий шаг)
+        const forceStepProgression = setTimeout(() => {
+            if (wizardStep === 'dependenciesCheck') {
+                console.log("App.js: Принудительный обход проверки зависимостей. Переход к CreateProjectPage.");
+                // Установите здесь название следующего шага, на который вы хотите попасть.
+                // Судя по названиям файлов, 'createProject' или 'home' могут быть следующими.
+                setWizardStep('createProject'); 
+            }
+        }, 2500); // Задержка 2.5 секунды, чтобы дать DependenciesCheckPage время обновить UI
+
+        // Функция очистки: предотвращает выполнение setTimeout, если компонент размонтируется
+        return () => clearTimeout(forceStepProgression);
+    }, [wizardStep]); // Зависимость от wizardStep гарантирует, что эффект сработает при изменении шага
+
+    // Эта функция передается в DependenciesCheckPage и будет вызвана им
+    // Но благодаря useEffect выше, App.js уже переключит шаг
+    const handleDependenciesReady = () => {
+        console.log("App.js: DependenciesCheckPage сообщил о готовности. (Шаг уже будет переключен нашим useEffect)");
+        // setWizardStep('createProject'); // Эту строку можно оставить закомментированной или удалить,
+                                        // так как forceStepProgression уже сделает это
+    };
+
+    // Функция для рендеринга текущей страницы/шага в зависимости от состояния wizardStep
+    const renderCurrentPage = () => {
+        switch (wizardStep) {
+            case 'dependenciesCheck':
+                return <DependenciesCheckPage onDependenciesReady={handleDependenciesReady} />;
+            case 'createProject':
+                return <CreateProjectPage />;
+            case 'home': // Если у вас есть 'home' страница
+                return <HomePage />;
+            case 'projectDetails': // Пример другой страницы
+                return <ProjectDetailsPage />;
+            // Добавьте другие кейсы для ваших страниц здесь
+            default:
+                // Если wizardStep станет чем-то неопределенным, или это страница по умолчанию
+                return <HomePage />; // Можно установить HomePage или любую другую стартовую страницу
+        }
+    };
+
+    return (
+        <div className="App">
+            {renderCurrentPage()}
+            {/* Здесь может быть логика для кнопки "Далее", если она находится в App.js */}
+            {/* Например: */}
+            {/* {wizardStep !== 'dependenciesCheck' && (
+                <button onClick={() => {
+                    // Логика перехода на следующий шаг, если кнопка "Далее" универсальна
+                    // Например, setWizardStep('next_logical_step');
+                    console.log('Кнопка "Далее" была нажата');
+                }}>Далее</button>
+            )} */}
+        </div>
+    );
+}
+
+export default App;

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSS Project Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Панель управления VSS проектами</h1>
+
+        <div id="step3" class="card">
+            <h2>Управление проектами</h2>
+            <div class="card-content">
+                <p>Здесь вы можете управлять вашими развернутыми VSS проектами.</p>
+                <div id="projectList">
+                    <p>Загрузка проектов...</p>
+                </div>
+            </div>
+            <div class="card-actions">
+                <button onclick="loadProjects()">Обновить список проектов</button>
+            </div>
+
+            <hr> <div class="card-content">
+                <h3>Загрузить Docker образ</h3>
+                <div class="form-group">
+                    <label for="dockerImageName">Имя образа (например, nginx:latest):</label>
+                    <input type="text" id="dockerImageName" placeholder="nginx:latest">
+                </div>
+                <button onclick="pullDockerImage()">Загрузить образ</button>
+            </div>
+
+            <hr> <div class="card-content">
+                <h3>Создать пользователя VSS для текущего проекта</h3>
+                <p>Выберите проект из списка выше, чтобы создать для него пользователя.</p>
+                <div class="form-group">
+                    <label for="vssUsername">Имя пользователя:</label>
+                    <input type="text" id="vssUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="vssPassword">Пароль:</label>
+                    <input type="password" id="vssPassword" required>
+                </div>
+                <button id="createUserButton" disabled>Создать пользователя</button>
+            </div>
+        </div>
+
+        <div class="card-actions" style="margin-top: 20px; justify-content: center;">
+            <a href="/" class="button">Вернуться к Мастеру установки</a>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

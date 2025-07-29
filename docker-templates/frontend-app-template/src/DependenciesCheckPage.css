@@ -1,0 +1,68 @@
+/* DependenciesCheckPage.css */
+
+/* Используем общие стили из App.css для page-container */
+.dependencies-check-page {
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 20px;
+    text-align: center;
+}
+
+.dependencies-check-page h1 {
+    margin-bottom: 30px;
+}
+
+.status-box {
+    background-color: #f0f8ff;
+    border: 1px solid #cceeff;
+    border-radius: 5px;
+    padding: 20px;
+    margin-top: 20px;
+    text-align: left; /* Выравнивание списка по левому краю */
+}
+
+.status-box h3 {
+    margin-top: 0;
+    color: #333;
+    font-size: 1.1em;
+    margin-bottom: 15px;
+}
+
+.status-box ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.status-box li {
+    margin-bottom: 10px;
+    font-size: 1.05em;
+    display: flex;
+    align-items: center;
+}
+
+.status-box li strong {
+    color: #0056b3;
+    min-width: 150px; /* Для выравнивания текста */
+    display: inline-block;
+}
+
+.loading-message, .warning-message {
+    padding: 15px;
+    border-radius: 5px;
+    margin-top: 20px;
+}
+
+.loading-message {
+    background-color: #e0f2f7;
+    color: #007bff;
+    border: 1px solid #b3e0ff;
+}
+
+.warning-message {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+}
+
+/* Переиспользуем .action-button из App.css */

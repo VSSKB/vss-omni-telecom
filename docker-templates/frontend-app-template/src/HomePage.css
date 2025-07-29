@@ -1,0 +1,86 @@
+/* Используем общие стили из App.css для page-container */
+.home-page {
+    /* Дополнительные стили, если нужны конкретно для HomePage */
+}
+
+.actions-section {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.actions-section h2 {
+    color: #333;
+    margin-bottom: 25px;
+}
+
+.action-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 20px; /* Пространство между кнопками */
+    flex-wrap: wrap; /* Для переноса на новую строку на маленьких экранах */
+}
+
+.action-button {
+    background-color: #28a745; /* Зеленый цвет для кнопок действий */
+    color: white;
+    padding: 15px 30px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1.1em;
+    text-decoration: none; /* Убрать подчеркивание у Link */
+    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.action-button:hover {
+    background-color: #218838;
+    transform: translateY(-2px);
+}
+
+.projects-list-section {
+    text-align: center; /* Центрируем заголовок */
+}
+
+.projects-list-section h2 {
+    color: #333;
+    margin-bottom: 25px;
+}
+
+.project-list {
+    list-style: none;
+    padding: 0;
+    display: grid; /* Используем Grid для удобного расположения карточек */
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Адаптивная сетка */
+    gap: 20px; /* Отступы между карточками */
+    justify-content: center; /* Центрируем карточки в сетке */
+}
+
+.project-item {
+    background-color: #e6f7ff;
+    border: 1px solid #99ddff;
+    padding: 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    text-align: left; /* Текст внутри карточки выравниваем по левому краю */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.project-item:hover {
+    background-color: #d1efff;
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+}
+
+.project-item h3 {
+    margin: 0 0 10px 0;
+    color: #0056b3;
+    font-size: 1.2em;
+}
+
+.project-item p {
+    margin: 0;
+    color: #666;
+    font-size: 0.95em;
+}

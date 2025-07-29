@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80" # Или любой другой порт, который ваше приложение слушает
+    volumes:
+      - .:/app
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    command: sh -c "chmod +x /app/setup.sh && /app/setup.sh && gunicorn your_app_name.wsgi:application --bind 0.0.0.0:80" # <-- ЗАМЕНИТЕ ЭТО НА СВОЮ КОМАНДУ ЗАПУСКА
+
+  redis:
+    image: "redis:6-alpine"
+    restart: always
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis_data:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+
+volumes:
+  redis_data:

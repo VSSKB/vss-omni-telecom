@@ -1,0 +1,68 @@
+// /root/install-wizard/docker-templates/frontend-app-template/src/App.js
+
+import React, { useState, useEffect } from 'react';
+import './App.css';
+import DependenciesCheckPage from './DependenciesCheckPage';
+import CreateProjectPage from './CreateProjectPage';
+import HomePage from './HomePage';
+import ProjectDetailsPage from './ProjectDetailsPage';
+
+function App() {
+    // В этом гибридном сценарии App.js может управлять внутренней маршрутизацией React
+    // или частью UI, которая может быть отображена на разных шагах.
+    // Если App.js является основной оберткой, которая содержит public/index.html
+    // или его части, то эта логика может быть избыточной для основного потока
+    // мастера, который управляется public/script.js.
+    // Однако, чтобы не ломать потенциальную внутреннюю логику React,
+    // оставим возможность для App.js переключать свои внутренние "шаги".
+
+    const [wizardStep, setWizardStep] = useState('dependenciesCheck'); // Предполагаемый начальный шаг React-компонента
+
+    useEffect(() => {
+        // Эта часть кода гарантирует, что даже если App.js отвечает за верхнеуровневый шаг,
+        // он автоматически перейдет на следующий шаг после "проверки зависимостей".
+        const forceStepProgression = setTimeout(() => {
+            if (wizardStep === 'dependenciesCheck') {
+                console.log("App.js: Принудительный обход React-проверки. Переход к CreateProjectPage.");
+                setWizardStep('createProject'); // Переключить на следующий предполагаемый шаг React-приложения
+            }
+        }, 1000); // Задержка 1 секунда
+
+        return () => clearTimeout(forceStepProgression);
+    }, [wizardStep]);
+
+    const handleDependenciesReady = () => {
+        console.log("App.js: DependenciesCheckPage сообщил о готовности React-части.");
+        // Поскольку public/script.js управляет основной навигацией,
+        // здесь можно не делать setWizardStep, но можно оставить для консистентности.
+        // setWizardStep('createProject');
+    };
+
+    const renderCurrentPage = () => {
+        // Этот Switch определяет, какой React-компонент будет отображен в зависимости от wizardStep
+        switch (wizardStep) {
+            case 'dependenciesCheck':
+                return <DependenciesCheckPage onDependenciesReady={handleDependenciesReady} />;
+            case 'createProject':
+                return <CreateProjectPage />;
+            case 'home':
+                return <HomePage />;
+            case 'projectDetails':
+                return <ProjectDetailsPage />;
+            default:
+                return <HomePage />; // Страница по умолчанию
+        }
+    };
+
+    return (
+        <div className="App">
+            {/* Если App.js отображает только один из этих компонентов в зависимости от своего состояния,
+                тогда renderCurrentPage будет работать.
+                Если public/index.html включает React-приложение как часть одного из своих шагов,
+                тогда эта логика будет работать внутри этого шага. */}
+            {renderCurrentPage()}
+        </div>
+    );
+}
+
+export default App;

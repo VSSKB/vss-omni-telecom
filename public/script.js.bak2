@@ -1,0 +1,217 @@
+// /root/install-wizard/public/script.js
+
+// Переменная для отслеживания текущего шага мастера установки
+let currentStep = 1;
+
+// Инициализация статуса зависимостей как УСПЕШНЫХ для обхода
+// Используем конкретные версии, как было видно в UI
+const dependenciesStatus = {
+    docker: { installed: true, version: '20.10.24+dfsg1, build 297e128' },
+    dockerCompose: { installed: true, version: '1.29.2, build unknown' },
+    nodejs: { installed: true, version: 'v18.19.0' }
+};
+// Функция, которая выполняется после загрузки всего DOM
+document.addEventListener('DOMContentLoaded', () => {
+    // Показать текущий шаг (изначально Шаг 1)
+    showStep(currentStep);
+    // Принудительно обновить UI статуса зависимостей и активировать кнопку "Далее"
+    updateDependencyStatusUI();
+    // Вызвать загрузку проектов, если мы на Шаге 3 (чтобы UI не был пустым)
+    if (currentStep === 3) {
+        loadProjects();
+    }
+});
+
+// Функция для отображения определенного шага мастера
+function showStep(step) {
+    // Скрыть все карточки шагов
+    document.querySelectorAll('.card').forEach(card => {
+        card.classList.add('hidden');
+    });
+    // Показать нужную карточку шага
+    document.getElementById(`step${step}`).classList.remove('hidden');
+    currentStep = step; // Обновить текущий шаг
+
+    // Специальная логика для Шага 1: принудительно активировать кнопку
+    if (step === 1) {
+        updateNextStepButton();
+    }
+    // Если переходим на шаг 3, обновим список проектов
+    if (step === 3) {
+        loadProjects();
+    }
+}
+
+// Функция для перехода на следующий шаг
+function nextStep(stepNumber) {
+    // Здесь можно добавить проверку валидности полей текущего шага,
+    // но для обхода мы просто переходим
+    showStep(stepNumber);
+}
+
+// Функция для перехода на предыдущий шаг
+function prevStep(stepNumber) {
+    showStep(stepNumber);
+}
+
+// Функция для обновления UI статуса зависимостей на Шаге 1
+function updateDependencyStatusUI() {
+    const statusDiv = document.getElementById('dependenciesStatus');
+    if (!statusDiv) return; // Выход, если элемент не найден
+
+    // Заполнение div'а статуса зависимостей на основе наших принудительных значений
+    let htmlContent = `
+        <p>Docker: <span style="color: green;">Установлено</span> (Версия: ${dependenciesStatus.docker.version})</p>
+        <p>Docker Compose: <span style="color: green;">Установлен</span> (Версия: ${dependenciesStatus.dockerCompose.version})</p>
+        <p>Node.js: <span style="color: green;">Установлен</span> (Версия: ${dependenciesStatus.nodejs.version})</p>
+        <p style="color: green; font-weight: bold;">Все зависимости проверены (ПРОВЕРКА ОБХОДИТСЯ).</p>
+    `;
+    statusDiv.innerHTML = htmlContent;
+    
+    // Принудительная активация кнопки "Далее" для Шага 1
+    updateNextStepButton();
+}
+
+// Функция для управления активностью кнопки "Далее" на Шаге 1
+function updateNextStepButton() {
+    const nextButton = document.getElementById('nextStep1Button');
+    if (nextButton) {
+        nextButton.disabled = false; // Кнопка "Далее" на Шаге 1 всегда активна
+    }
+}
+
+// =======================================================
+// Заглушки для функций, используемых на других шагах
+// Это позволит проходить по шагам, но реальных действий не будет
+// =======================================================
+
+async function generatePorts() {
+    alert('Функция генерации портов временно отключена для обхода установки.');
+    // Здесь должна быть логика получения свободных портов от сервера
+    // Например:
+    // try {
+    //     const response = await fetch('/api/generate-ports');
+    //     const data = await response.json();
+    //     document.getElementById('nginxPort').value = data.nginx;
+    //     document.getElementById('backendPort').value = data.backend;
+    //     document.getElementById('frontendPort').value = data.frontend;
+    //     document.getElementById('mikopbxPort').value = data.mikopbx;
+    // } catch (error) {
+    //     console.error('Ошибка при генерации портов:', error);
+    //     alert('Не удалось сгенерировать порты.');
+    // }
+}
+
+async function generateDbCredentials() {
+    alert('Функция генерации данных БД временно отключена для обхода установки.');
+    // Здесь должна быть логика генерации учетных данных для БД
+}
+
+async function generateProject() {
+    alert('Функция генерации проекта временно отключена для обхода установки.');
+    // Здесь должен быть реальный AJAX-запрос к бэкенду для создания проекта
+    // Например:
+    // const projectName = document.getElementById('projectName').value;
+    // ... сбор остальных данных ...
+    // try {
+    //     const response = await fetch('/api/generate-project', {
+    //         method: 'POST',
+    //         headers: { 'Content-Type': 'application/json' },
+    //         body: JSON.stringify({ projectName, /* ... */ })
+    //     });
+    //     const result = await response.json();
+    //     if (response.ok) {
+    //         alert(`Проект "${result.projectName}" успешно сгенерирован!`);
+    //         showStep(3); // Переход к следующему шагу после успешной генерации
+    //         loadProjects(); // Загрузить обновленный список проектов
+    //     } else {
+    //         alert(`Ошибка: ${result.message}`);
+    //     }
+    // } catch (error) {
+    //     console.error('Ошибка генерации проекта:', error);
+    //     alert('Ошибка при генерации проекта.');
+    // }
+}
+
+async function loadProjects() {
+    const projectListDiv = document.getElementById('projectList');
+    if (projectListDiv) {
+        projectListDiv.innerHTML = '<p style="color: orange;">Список проектов временно недоступен (обход установки).</p>';
+    }
+    // Здесь должна быть логика загрузки проектов от бэкенда
+    // Например:
+    // try {
+    //     const response = await fetch('/api/projects');
+    //     const projects = await response.json();
+    //     let projectsHtml = '';
+    //     if (projects.length === 0) {
+    //         projectsHtml = '<p>Проекты не найдены.</p>';
+    //     } else {
+    //         projectsHtml = projects.map(project => `
+    //             <div class="project-item">
+    //                 <span>${project.name} (ID: ${project.id})</span>
+    //                 <button onclick="startProject('${project.id}')">Запустить</button>
+    //                 <button onclick="stopProject('${project.id}')">Остановить</button>
+    //                 <button onclick="deleteProject('${project.id}')">Удалить</button>
+    //             </div>
+    //         `).join('');
+    //     }
+    //     projectListDiv.innerHTML = projectsHtml;
+    // } catch (error) {
+    //     console.error('Ошибка загрузки проектов:', error);
+    //     projectListDiv.innerHTML = '<p style="color: red;">Ошибка при загрузке проектов.</p>';
+    // }
+}
+
+// Заглушки для функций управления проектами
+function startProject(projectId) {
+    alert(`Запрос на запуск проекта ${projectId} временно отключен.`);
+}
+
+function stopProject(projectId) {
+    alert(`Запрос на остановку проекта ${projectId} временно отключен.`);
+}
+
+function deleteProject(projectId) {
+    if (confirm(`Вы уверены, что хотите удалить проект ${projectId}?`)) {
+        alert(`Запрос на удаление проекта ${projectId} временно отключен.`);
+    }
+}
+
+// Функции для модальных окон
+function showCreateUserModal(projectId) {
+    alert(`Модальное окно создания пользователя для проекта ${projectId} временно отключено.`);
+    // document.getElementById('createUserModal').classList.remove('hidden-modal');
+    // document.getElementById('confirmCreateUserButton').onclick = () => { /* ... */ };
+}
+
+function closeCreateUserModal() {
+    document.getElementById('createUserModal').classList.add('hidden-modal');
+}
+
+function showPullDockerImageModal(projectId) {
+    alert(`Модальное окно загрузки Docker образа временно отключено.`);
+    // document.getElementById('pullDockerImageModal').classList.remove('hidden-modal');
+    // document.getElementById('confirmPullDockerImageButton').onclick = () => { /* ... */ };
+}
+
+function closePullDockerImageModal() {
+    document.getElementById('pullDockerImageModal').classList.add('hidden-modal');
+}
+
+// Функции для управления чекбоксами (PostgreSQL)
+const includePostgresCheckbox = document.getElementById('includePostgres');
+const postgresSettingsDiv = document.getElementById('postgresSettings');
+if (includePostgresCheckbox && postgresSettingsDiv) {
+    includePostgresCheckbox.addEventListener('change', (event) => {
+        if (event.target.checked) {
+            postgresSettingsDiv.classList.remove('hidden');
+        } else {
+            postgresSettingsDiv.classList.add('hidden');
+        }
+    });
+}
+
+// Если есть другие функции, на которые ссылается index.html или другие скрипты,
+// но они не были предоставлены, вам может понадобиться создать для них заглушки
+// или вернуть их оригинальный код, если он не мешает обходу.

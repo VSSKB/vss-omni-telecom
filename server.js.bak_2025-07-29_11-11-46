@@ -1,0 +1,460 @@
+// /root/install-wizard/server.js
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const { exec, execSync } = require('child_process');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const { v4: uuidv4 } = require('uuid');
+
+const app = express();
+const PORT = 3000;
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Определения путей к директориям
+const BASE_DIR = __dirname;
+const PROJECTS_DIR = path.join(BASE_DIR, 'projects');
+const DB_DATA_DIR = path.join(BASE_DIR, 'db_data');
+const DOCKER_TEMPLATES_DIR = path.join(BASE_DIR, 'docker-templates');
+
+// Путь к файлу с данными проектов
+const PROJECTS_JSON_PATH = path.join(BASE_DIR, 'projects.json');
+
+// --- Вспомогательные функции для работы с файлами и Docker ---
+
+// Проверка и создание необходимых директорий
+function ensureDirectoriesExist() {
+    // Создаем основные директории
+    [PROJECTS_DIR, DB_DATA_DIR].forEach(dir => {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+            console.log(`Директория ${dir} создана.`);
+        } else {
+            console.log(`Директория ${dir} уже существует.`);
+        }
+    });
+
+    // Проверка наличия и создание заглушек для шаблонов Docker
+    const backendTemplatePath = path.join(DOCKER_TEMPLATES_DIR, 'backend');
+    const frontendBuildSourcePath = path.join(DOCKER_TEMPLATES_DIR, 'frontend-app-template', 'build');
+
+    // Если папки backend нет, создаем ее и пустые файлы-заглушки
+    if (!fs.existsSync(backendTemplatePath)) {
+        fs.mkdirSync(backendTemplatePath, { recursive: true });
+        console.log(`Директория ${backendTemplatePath} создана.`);
+        fs.writeFileSync(path.join(backendTemplatePath, 'app.js'), 'console.log("Backend placeholder is running!");');
+        fs.writeFileSync(path.join(backendTemplatePath, 'package.json'), '{}');
+        console.log(`Созданы файлы-заглушки в ${backendTemplatePath}.`);
+    }
+
+    // Если папки build для фронтенда нет, создаем ее и пустой index.html
+    if (!fs.existsSync(frontendBuildSourcePath)) {
+        fs.mkdirSync(frontendBuildSourcePath, { recursive: true });
+        console.log(`Директория ${frontendBuildSourcePath} создана.`);
+        fs.writeFileSync(path.join(frontendBuildSourcePath, 'index.html'), '<h1>Frontend application placeholder.</h1>');
+        console.log(`Создан файл-заглушка в ${frontendBuildSourcePath}.`);
+    }
+}
+
+
+// Проверка существования шаблонов Docker
+function checkDockerTemplates() {
+    const templates = [
+        'backend.Dockerfile',
+        'frontend.Dockerfile',
+        'docker-compose.yml.template',
+        'nginx.conf'
+    ];
+    let allTemplatesExist = true;
+    templates.forEach(template => {
+        const templatePath = path.join(DOCKER_TEMPLATES_DIR, template);
+        if (!fs.existsSync(templatePath)) {
+            console.error(`Ошибка: Шаблон Docker не найден: ${templatePath}`);
+            allTemplatesExist = false;
+        }
+    });
+    if (allTemplatesExist) {
+        console.log('Основные шаблоны Docker проверены и готовы к использованию.');
+    } else {
+        console.error('Некоторые основные шаблоны Docker отсутствуют. Убедитесь, что они находятся в директории docker-templates.');
+    }
+}
+
+
+// Запуск начальных проверок при старте сервера
+ensureDirectoriesExist();
+checkDockerTemplates(); // Проверяет только файлы-шаблоны Dockerfile и docker-compose
+
+// Инициализация файла projects.json, если его нет
+if (!fs.existsSync(PROJECTS_JSON_PATH)) {
+    fs.writeFileSync(PROJECTS_JSON_PATH, '[]', 'utf8');
+    console.log(`Файл ${PROJECTS_JSON_PATH} создан.`);
+}
+
+
+// --- API Эндпоинты ---
+
+// API для проверки зависимостей (Docker, Docker Compose, Node.js)
+app.get('/api/check-dependencies', async (req, res) => {
+    const results = {
+        docker: { installed: false, version: '' },
+        dockerCompose: { installed: false, version: '' },
+        nodejs: { installed: false, version: '' },
+        allDependenciesMet: false
+    };
+
+    const checkCommand = (cmd) => {
+        try {
+            const output = execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+            return output;
+        } catch (error) {
+            console.error(`Ошибка выполнения команды "${cmd}": ${error.message}`);
+            return null;
+        }
+    };
+
+    // Проверка Docker
+    const dockerVersion = checkCommand('docker --version');
+    if (dockerVersion) {
+        results.docker.installed = true;
+        results.docker.version = dockerVersion.replace('Docker version ', '');
+    }
+
+    // Проверка Docker Compose (v1 и v2)
+    let composeVersion = checkCommand('docker-compose --version'); // v1
+    if (composeVersion) {
+        results.dockerCompose.installed = true;
+        results.dockerCompose.version = composeVersion.replace('docker-compose version ', '');
+    } else {
+        composeVersion = checkCommand('docker compose version --short'); // v2, если v1 не найден
+        if (composeVersion) {
+            results.dockerCompose.installed = true;
+            results.dockerCompose.version = `v2.${composeVersion.trim()}`;
+        }
+    }
+
+    // Проверка Node.js
+    const nodeVersion = checkCommand('node -v');
+    if (nodeVersion) {
+        results.nodejs.installed = true;
+        results.nodejs.version = nodeVersion;
+    }
+
+    results.allDependenciesMet = results.docker.installed && results.dockerCompose.installed && results.nodejs.installed;
+
+    res.json(results);
+});
+
+// API для генерации свободных портов
+app.get('/api/generate-ports', async (req, res) => {
+    const getRandomPort = () => Math.floor(Math.random() * (65535 - 10000 + 1)) + 10000;
+
+    const ports = {
+        nginx: 8080, // Фиксированный порт для nginx
+        backend: getRandomPort(),
+        frontend: getRandomPort(),
+        mikopbx: getRandomPort(),
+        db: getRandomPort()
+    };
+
+    // Дополнительная логика, чтобы убедиться, что сгенерированные порты уникальны (кроме 8080)
+    let generatedUniquePorts = new Set();
+    generatedUniquePorts.add(8080); // Nginx порт может быть фиксированным
+
+    // Генерируем остальные 4 порта
+    while (generatedUniquePorts.size < 5) { // 5 уникальных портов в итоге (nginx + 4 рандомных)
+        generatedUniquePorts.add(getRandomPort());
+    }
+
+    // Извлекаем только те, что не 8080, и назначаем их
+    const availableRandomPorts = Array.from(generatedUniquePorts).filter(p => p !== 8080);
+    
+    // Убедимся, что есть достаточно портов, прежде чем брать их
+    if (availableRandomPorts.length >= 4) {
+        ports.backend = availableRandomPorts.shift();
+        ports.frontend = availableRandomPorts.shift();
+        ports.mikopbx = availableRandomPorts.shift();
+        ports.db = availableRandomPorts.shift();
+    } else {
+        // Fallback, если по какой-то причине не удалось сгенерировать 4 уникальных порта
+        console.warn("Не удалось сгенерировать достаточно уникальных портов. Используем простые случайные.");
+        ports.backend = getRandomPort();
+        ports.frontend = getRandomPort();
+        ports.mikopbx = getRandomPort();
+        ports.db = getRandomPort();
+    }
+
+
+    res.json(ports);
+});
+
+// API для генерации проекта
+app.post('/api/generate-project', async (req, res) => {
+    const { projectName, ports, includeMikopbx, includePostgres, db } = req.body;
+
+    if (!projectName || !ports) {
+        return res.status(400).json({ message: 'Недостаточно данных для создания проекта.' });
+    }
+
+    const projectId = uuidv4();
+    const projectPath = path.join(PROJECTS_DIR, projectId);
+    const backendTemplatePath = path.join(DOCKER_TEMPLATES_DIR, 'backend');
+    const frontendTemplatePath = path.join(DOCKER_TEMPLATES_DIR, 'frontend-app-template');
+    const dockerComposeTemplatePath = path.join(DOCKER_TEMPLATES_DIR, 'docker-compose.yml.template');
+    const backendDockerfileTemplatePath = path.join(DOCKER_TEMPLATES_DIR, 'backend.Dockerfile');
+    const frontendDockerfileTemplatePath = path.join(DOCKER_TEMPLATES_DIR, 'frontend.Dockerfile');
+    const nginxConfTemplatePath = path.join(DOCKER_TEMPLATES_DIR, 'nginx.conf');
+
+    try {
+        // 1. Создание директории проекта
+        fs.mkdirSync(projectPath, { recursive: true });
+
+        // 2. Копирование шаблонов приложений
+        // Копирование собранного фронтенда
+        const frontendBuildSourcePath = path.join(frontendTemplatePath, 'build');
+        const frontendDestPath = path.join(projectPath, 'frontend');
+        fs.mkdirSync(frontendDestPath, { recursive: true }); // Убедимся, что целевая папка существует
+        execSync(`cp -R ${frontendBuildSourcePath}/. ${frontendDestPath}/`); // Использовать './.' для копирования содержимого, включая скрытые файлы
+
+        // Копирование backend (исходники)
+        const backendDestPath = path.join(projectPath, 'backend');
+        fs.mkdirSync(backendDestPath, { recursive: true }); // Убедимся, что целевая папка существует
+        execSync(`cp -R ${backendTemplatePath}/. ${backendDestPath}/`); // Использовать './.' для копирования содержимого, включая скрытые файлы
+
+
+        // 3. Копирование и модификация Dockerfile и docker-compose.yml.template
+        let dockerComposeContent = fs.readFileSync(dockerComposeTemplatePath, 'utf8');
+        let backendDockerfileContent = fs.readFileSync(backendDockerfileTemplatePath, 'utf8');
+        let frontendDockerfileContent = fs.readFileSync(frontendDockerfileTemplatePath, 'utf8');
+        let nginxConfContent = fs.readFileSync(nginxConfTemplatePath, 'utf8');
+
+        // Замена плейсхолдеров
+        // Важно: в шаблоне docker-compose.yml.template не должно быть {{PROJECT_ID}}
+        dockerComposeContent = dockerComposeContent
+            .replace(/{{NGINX_PORT}}/g, ports.nginx)
+            .replace(/{{BACKEND_PORT}}/g, ports.backend)
+            .replace(/{{FRONTEND_PORT}}/g, ports.frontend);
+
+        // Динамическое добавление сервисов MIKOPBX и POSTGRES
+        let mikopbxService = '';
+        if (includeMikopbx) {
+            mikopbxService = `
+  mikopbx:
+    image: mikopbx/miko-pbx:latest # или ваша актуальная версия
+    ports:
+      - "${ports.mikopbx}:80"
+    restart: always
+    volumes:
+      - ./mikopbx_data:/var/lib/mikopbx
+`;
+        }
+        dockerComposeContent = dockerComposeContent.replace(/{{MIKOPBX_SERVICE}}/g, mikopbxService || ''); // Заменяем на пустую строку, если не включен
+
+        let postgresService = '';
+        if (includePostgres && db) {
+            postgresService = `
+  postgres:
+    image: postgres:13-alpine # или ваша актуальная версия
+    environment:
+      POSTGRES_DB: ${db.dbName}
+      POSTGRES_USER: ${db.dbUser}
+      POSTGRES_PASSWORD: ${db.dbPassword}
+    ports:
+      - "${db.dbPort}:5432"
+    restart: always
+    volumes:
+      - ./db_data:/var/lib/postgresql/data
+`;
+        }
+        dockerComposeContent = dockerComposeContent.replace(/{{POSTGRES_SERVICE}}/g, postgresService || ''); // Заменяем на пустую строку, если не включен
+
+
+        // Сохранение модифицированных файлов
+        fs.writeFileSync(path.join(projectPath, 'docker-compose.yml'), dockerComposeContent);
+        fs.writeFileSync(path.join(projectPath, 'backend.Dockerfile'), backendDockerfileContent);
+        fs.writeFileSync(path.join(projectPath, 'frontend.Dockerfile'), frontendDockerfileContent);
+        fs.writeFileSync(path.join(projectPath, 'nginx.conf'), nginxConfContent);
+
+
+        // 4. Сохранение метаданных проекта
+        const projects = JSON.parse(fs.readFileSync(PROJECTS_JSON_PATH, 'utf8') || '[]');
+        projects.push({
+            id: projectId,
+            name: projectName,
+            path: projectPath,
+            status: 'stopped', // Изначально проект остановлен
+            ports: ports,
+            includeMikopbx,
+            includePostgres,
+            db: includePostgres && db ? { dbName: db.dbName, dbUser: db.dbUser, dbPort: db.dbPort } : undefined
+        });
+        fs.writeFileSync(PROJECTS_JSON_PATH, JSON.stringify(projects, null, 2));
+
+        res.json({ message: 'Проект успешно сгенерирован!', projectId: projectId, projectName: projectName });
+
+    } catch (error) {
+        console.error('Ошибка при генерации проекта:', error);
+        // Попробуйте очистить созданную директорию при ошибке
+        if (fs.existsSync(projectPath)) {
+            fs.rmSync(projectPath, { recursive: true, force: true });
+        }
+        res.status(500).json({ message: 'Ошибка сервера при генерации проекта.', error: error.message, stack: error.stack });
+    }
+});
+
+// API для получения списка проектов
+app.get('/api/projects', (req, res) => {
+    try {
+        if (!fs.existsSync(PROJECTS_JSON_PATH)) {
+            return res.json([]);
+        }
+        const projects = JSON.parse(fs.readFileSync(PROJECTS_JSON_PATH, 'utf8'));
+        res.json(projects);
+    } catch (error) {
+        console.error('Ошибка чтения projects.json:', error);
+        res.status(500).json({ message: 'Ошибка чтения списка проектов.' });
+    }
+});
+
+// API для запуска проекта
+app.post('/api/projects/:id/start', (req, res) => {
+    const projectId = req.params.id;
+    const projects = JSON.parse(fs.readFileSync(PROJECTS_JSON_PATH, 'utf8'));
+    const project = projects.find(p => p.id === projectId);
+
+    if (!project) {
+        return res.status(404).json({ message: 'Проект не найден.' });
+    }
+
+    const projectPath = project.path;
+    // Использование docker-compose (с дефисом)
+    exec(`docker-compose -f "${path.join(projectPath, 'docker-compose.yml')}" up -d --build`, { cwd: projectPath }, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Ошибка запуска проекта ${projectId}: ${error.message}`);
+            return res.status(500).json({ message: `Ошибка запуска проекта: ${error.message}`, details: stderr });
+        }
+        project.status = 'running';
+        fs.writeFileSync(PROJECTS_JSON_PATH, JSON.stringify(projects, null, 2));
+        res.json({ message: `Проект ${projectId} успешно запущен.`, stdout, stderr });
+    });
+});
+
+// API для остановки проекта
+app.post('/api/projects/:id/stop', (req, res) => {
+    const projectId = req.params.id;
+    const projects = JSON.parse(fs.readFileSync(PROJECTS_JSON_PATH, 'utf8'));
+    const project = projects.find(p => p.id === projectId);
+
+    if (!project) {
+        return res.status(404).json({ message: 'Проект не найден.' });
+    }
+
+    const projectPath = project.path;
+    // Использование docker-compose (с дефисом)
+    exec(`docker-compose -f "${path.join(projectPath, 'docker-compose.yml')}" down`, { cwd: projectPath }, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Ошибка остановки проекта ${projectId}: ${error.message}`);
+            return res.status(500).json({ message: `Ошибка остановки проекта: ${error.message}`, details: stderr });
+        }
+        project.status = 'stopped';
+        fs.writeFileSync(PROJECTS_JSON_PATH, JSON.stringify(projects, null, 2));
+        res.json({ message: `Проект ${projectId} успешно остановлен.`, stdout, stderr });
+    });
+});
+
+// API для удаления проекта
+app.delete('/api/projects/:id', (req, res) => {
+    const projectId = req.params.id;
+    let projects = JSON.parse(fs.readFileSync(PROJECTS_JSON_PATH, 'utf8'));
+    const projectIndex = projects.findIndex(p => p.id === projectId);
+
+    if (projectIndex === -1) {
+        return res.status(404).json({ message: 'Проект не найден.' });
+    }
+
+    const projectToRemove = projects[projectIndex];
+    const projectPath = projectToRemove.path;
+
+    try {
+        // Сначала останавливаем проект, если он запущен
+        // Использование docker-compose (с дефисом)
+        execSync(`docker-compose -f "${path.join(projectPath, 'docker-compose.yml')}" down`, { stdio: 'ignore', encoding: 'utf8', cwd: projectPath });
+
+        // Удаляем директорию проекта
+        fs.rmSync(projectPath, { recursive: true, force: true });
+
+        // Удаляем проект из списка
+        projects.splice(projectIndex, 1);
+        fs.writeFileSync(PROJECTS_JSON_PATH, JSON.stringify(projects, null, 2));
+
+        res.json({ message: `Проект ${projectId} успешно удален.` });
+    } catch (error) {
+        console.error(`Ошибка при удалении проекта ${projectId}:`, error);
+        res.status(500).json({ message: `Ошибка сервера при удалении проекта: ${error.message}`, error: error.message });
+    }
+});
+
+
+// API для загрузки Docker образа (глобально)
+app.post('/api/pull-docker-image', (req, res) => {
+    const { imageName } = req.body;
+    if (!imageName) {
+        return res.status(400).json({ message: 'Имя образа не указано.' });
+    }
+
+    exec(`docker pull ${imageName}`, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Ошибка загрузки образа ${imageName}: ${error.message}`);
+            return res.status(500).json({ message: `Ошибка загрузки образа: ${error.message}`, details: stderr });
+        }
+        res.json({ message: `Образ ${imageName} успешно загружен.`, stdout, stderr });
+    });
+});
+
+// API для создания пользователя VSS (пример, требует реализации на стороне VSS)
+app.post('/api/create-vss-user', (req, res) => {
+    const { username, password, projectId } = req.body;
+    if (!username || !password || !projectId) {
+        return res.status(400).json({ message: 'Имя пользователя, пароль и ID проекта обязательны.' });
+    }
+
+    // Здесь должна быть реальная логика создания пользователя в выбранном проекте VSS.
+    // Это может включать:
+    // 1. Подключение к базе данных проекта.
+    // 2. Выполнение SQL-запроса или API-вызова к бэкенду VSS для создания пользователя.
+    // 3. Обработка ошибок (например, пользователь уже существует, некорректные данные).
+
+    console.log(`Имитация создания пользователя VSS для проекта ${projectId}: ${username} / ${password}`);
+    // В реальном приложении здесь будет асинхронный вызов к бэкенду VSS.
+    // Например:
+    /*
+    try {
+        const vssApiUrl = `http://localhost:${project.ports.backend}/create-user`; // Пример
+        const vssApiResponse = await fetch(vssApiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const vssResult = await vssApiResponse.json();
+        if (vssApiResponse.ok) {
+            res.json({ message: `Пользователь ${username} успешно создан в проекте ${projectId}.` });
+        } else {
+            res.status(vssApiResponse.status).json({ message: `Ошибка VSS API: ${vssResult.message}` });
+        }
+    } catch (vssError) {
+        console.error(`Ошибка при создании пользователя в VSS для проекта ${projectId}:`, vssError);
+        res.status(500).json({ message: `Ошибка связи с VSS API: ${vssError.message}` });
+    }
+    */
+    res.json({ message: `Пользователь ${username} успешно создан (имитация) для проекта ${projectId}.` });
+});
+
+
+// Запуск сервера
+app.listen(PORT, () => {
+    console.log(`Сервер запущен на http://localhost:${PORT}`);
+    console.log(`Откройте http://localhost:${PORT} в вашем браузере.`);
+});

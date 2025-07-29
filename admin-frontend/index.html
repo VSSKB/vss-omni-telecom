@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель проекта</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #fff;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .section {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            background-color: #f9fafb;
+        }
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1f2937;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            color: #fff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        .btn-secondary {
+            background-color: #6b7280;
+            color: #fff;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563;
+        }
+        .input-field {
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1rem;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        .message-box {
+            background-color: #e0f2f7;
+            border: 1px solid #b2ebf2;
+            color: #00796b;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 0.875rem;
+        }
+        .error-message {
+            background-color: #ffe0b2;
+            border-color: #ffb74d;
+            color: #e65100;
+        }
+        .success-message {
+            background-color: #c8e6c9;
+            border-color: #a5d6a7;
+            color: #2e7d32;
+        }
+        .flex-row {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .grid-cols-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        @media (max-width: 768px) {
+            .container {
+                padding: 1.5rem;
+                margin: 1rem;
+            }
+            .grid-cols-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Админ-панель проекта</h1>
+
+        <!-- Секция Аутентификации -->
+        <div id="auth-section" class="section">
+            <div class="section-title">Аутентификация</div>
+            <div class="flex flex-col gap-4">
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-700">Имя пользователя:</label>
+                    <input type="text" id="username" class="input-field mt-1" placeholder="user или admin">
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700">Пароль:</label>
+                    <input type="password" id="password" class="input-field mt-1" placeholder="pass или adminpass">
+                </div>
+                <div class="flex-row">
+                    <button id="login-btn" class="btn btn-primary">Войти</button>
+                    <button id="register-btn" class="btn btn-secondary">Зарегистрироваться</button>
+                </div>
+                <div id="auth-status" class="message-box hidden"></div>
+            </div>
+        </div>
+
+        <!-- Секция Статуса Сервера и AMI -->
+        <div id="status-section" class="section hidden">
+            <div class="section-title">Статус Сервера и AMI</div>
+            <p id="server-status" class="text-gray-700"></p>
+            <p id="ami-status" class="text-gray-700"></p>
+            <div id="ami-events-log" class="message-box mt-4">
+                <p>Журнал событий AMI:</p>
+            </div>
+        </div>
+
+        <!-- Секция Управления AMI -->
+        <div id="ami-control-section" class="section hidden">
+            <div class="section-title">Управление Asterisk AMI</div>
+            <div class="flex flex-col gap-4">
+                <div>
+                    <label for="ami-action-name" class="block text-sm font-medium text-gray-700">Действие AMI (Action):</label>
+                    <input type="text" id="ami-action-name" class="input-field mt-1" placeholder="Например, Originate, Status">
+                </div>
+                <div>
+                    <label for="ami-action-params" class="block text-sm font-medium text-gray-700">Параметры (JSON):</label>
+                    <textarea id="ami-action-params" class="input-field mt-1 h-24" placeholder='{"Channel": "SIP/100", "Context": "default", "Exten": "s", "Priority": 1}'></textarea>
+                </div>
+                <button id="send-ami-action-btn" class="btn btn-primary">Отправить AMI Действие</button>
+                <div id="ami-response" class="message-box mt-4">
+                    <p>Ответы AMI:</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Секция Управления Конференцией -->
+        <div id="conference-control-section" class="section hidden">
+            <div class="section-title">Управление Конференцией</div>
+            <div class="flex flex-col gap-4">
+                <div>
+                    <label for="conference-name" class="block text-sm font-medium text-gray-700">Имя конференции:</label>
+                    <input type="text" id="conference-name" class="input-field mt-1" value="1234">
+                </div>
+                <button id="join-conference-btn" class="btn btn-primary">Присоединиться к конференции (мониторинг DTMF)</button>
+                <div id="conference-status" class="message-box mt-4">
+                    <p>Статус конференции:</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Секция Управления ADB -->
+        <div id="adb-control-section" class="section hidden">
+            <div class="section-title">Управление ADB Устройствами</div>
+            <div class="flex flex-col gap-4">
+                <div>
+                    <label for="adb-device-select" class="block text-sm font-medium text-gray-700">Выберите устройство:</label>
+                    <select id="adb-device-select" class="input-field mt-1">
+                        <option value="">Нет устройств</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="adb-dial-number" class="block text-sm font-medium text-gray-700">Номер для набора:</label>
+                    <input type="text" id="adb-dial-number" class="input-field mt-1" placeholder="Например, +79123456789">
+                </div>
+                <div class="flex-row">
+                    <button id="adb-dial-btn" class="btn btn-primary">Набрать</button>
+                    <button id="adb-answer-btn" class="btn btn-secondary">Ответить</button>
+                    <button id="adb-hangup-btn" class="btn btn-secondary">Отбой</button>
+                </div>
+                <div id="adb-response" class="message-box mt-4">
+                    <p>Ответы ADB:</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const backendUrl = 'http://localhost:8181'; // URL бэкенда админки
+        const wsUrl = `ws://localhost:8181`; // WebSocket URL
+
+        const authSection = document.getElementById('auth-section');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const loginBtn = document.getElementById('login-btn');
+        const registerBtn = document.getElementById('register-btn');
+        const authStatusDiv = document.getElementById('auth-status');
+
+        const statusSection = document.getElementById('status-section');
+        const serverStatusP = document.getElementById('server-status');
+        const amiStatusP = document.getElementById('ami-status');
+        const amiEventsLogDiv = document.getElementById('ami-events-log');
+
+        const amiControlSection = document.getElementById('ami-control-section');
+        const amiActionNameInput = document.getElementById('ami-action-name');
+        const amiActionParamsTextarea = document.getElementById('ami-action-params');
+        const sendAmiActionBtn = document.getElementById('send-ami-action-btn');
+        const amiResponseDiv = document.getElementById('ami-response');
+
+        const conferenceControlSection = document.getElementById('conference-control-section');
+        const conferenceNameInput = document.getElementById('conference-name');
+        const joinConferenceBtn = document.getElementById('join-conference-btn');
+        const conferenceStatusDiv = document.getElementById('conference-status');
+
+        const adbControlSection = document.getElementById('adb-control-section');
+        const adbDeviceSelect = document.getElementById('adb-device-select');
+        const adbDialNumberInput = document.getElementById('adb-dial-number');
+        const adbDialBtn = document.getElementById('adb-dial-btn');
+        const adbAnswerBtn = document.getElementById('adb-answer-btn');
+        const adbHangupBtn = document.getElementById('adb-hangup-btn');
+        const adbResponseDiv = document.getElementById('adb-response');
+
+        let ws;
+        let authToken = localStorage.getItem('adminAuthToken'); // Пытаемся получить токен из localStorage
+
+        // --- Вспомогательные функции для UI ---
+        function showMessage(element, message, type = 'info') {
+            element.textContent = message;
+            element.className = `message-box mt-4 ${type}-message`;
+            element.classList.remove('hidden');
+        }
+
+        function appendLog(element, message, type = 'info') {
+            const span = document.createElement('span');
+            span.textContent = message + '\n';
+            span.style.color = type === 'error' ? '#e65100' : (type === 'success' ? '#2e7d32' : '#00796b');
+            element.appendChild(span);
+            element.scrollTop = element.scrollHeight; // Прокрутка вниз
+        }
+
+        function hideAllSections() {
+            statusSection.classList.add('hidden');
+            amiControlSection.classList.add('hidden');
+            conferenceControlSection.classList.add('hidden');
+            adbControlSection.classList.add('hidden');
+        }
+
+        function showAdminPanel() {
+            authSection.classList.add('hidden');
+            statusSection.classList.remove('hidden');
+            amiControlSection.classList.remove('hidden');
+            conferenceControlSection.classList.remove('hidden');
+            adbControlSection.classList.remove('hidden');
+        }
+
+        function showAuthSection() {
+            authSection.classList.remove('hidden');
+            hideAllSections();
+        }
+
+        // --- WebSocket подключение ---
+        function connectWebSocket() {
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                console.log('WebSocket уже подключен или подключается.');
+                return;
+            }
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                appendLog(amiEventsLogDiv, 'Подключено к WebSocket.', 'success');
+                serverStatusP.textContent = `Статус сервера: Подключен к бэкенду (${wsUrl})`;
+                // Отправляем токен авторизации сразу после открытия соединения
+                if (authToken) {
+                    ws.send(JSON.stringify({ type: 'auth', token: authToken }));
+                } else {
+                    showMessage(authStatusDiv, 'Пожалуйста, войдите в систему.', 'info');
+                    showAuthSection();
+                }
+            };
+
+            ws.onmessage = event => {
+                const message = JSON.parse(event.data);
+                console.log('Получено сообщение WS:', message);
+
+                switch (message.type) {
+                    case 'server_status':
+                        serverStatusP.textContent = `Статус сервера: ${message.message}`;
+                        break;
+                    case 'auth_status':
+                        if (message.success) {
+                            authToken = localStorage.getItem('adminAuthToken'); // Обновляем токен на всякий случай
+                            showMessage(authStatusDiv, message.message, 'success');
+                            showAdminPanel(); // Показываем админ-панель после успешной авторизации
+                        } else {
+                            showMessage(authStatusDiv, message.message, 'error');
+                            localStorage.removeItem('adminAuthToken'); // Удаляем недействительный токен
+                            authToken = null;
+                            showAuthSection(); // Снова показываем секцию аутентификации
+                        }
+                        break;
+                    case 'ami_status':
+                        amiStatusP.textContent = `Статус AMI: ${message.message}`;
+                        if (message.status === 'connected') {
+                            amiStatusP.style.color = 'green';
+                        } else if (message.status === 'reconnecting') {
+                            amiStatusP.style.color = 'orange';
+                        } else {
+                            amiStatusP.style.color = 'red';
+                        }
+                        break;
+                    case 'ami_event':
+                        appendLog(amiEventsLogDiv, `AMI Event: ${JSON.stringify(message.data, null, 2)}`);
+                        break;
+                    case 'ami_action_response':
+                        appendLog(amiResponseDiv, `Ответ на ${message.action}: ${JSON.stringify(message.data, null, 2)}`, 'success');
+                        break;
+                    case 'ami_error':
+                        appendLog(amiResponseDiv, `Ошибка AMI: ${message.message}`, 'error');
+                        break;
+                    case 'conf_originate_response':
+                        appendLog(conferenceStatusDiv, `Конференция: ${message.message}`, message.success ? 'success' : 'error');
+                        break;
+                    case 'adb_device_update':
+                        updateAdbDeviceList(message.devices);
+                        break;
+                    case 'adb_action_response':
+                        appendLog(adbResponseDiv, `ADB Ответ: ${JSON.stringify(message, null, 2)}`, message.success ? 'success' : 'error');
+                        break;
+                    case 'error':
+                        appendLog(amiEventsLogDiv, `Ошибка: ${message.message}`, 'error');
+                        break;
+                }
+            };
+
+            ws.onclose = () => {
+                appendLog(amiEventsLogDiv, 'Отключено от WebSocket. Попытка переподключения через 3 секунды...', 'error');
+                serverStatusP.textContent = 'Статус сервера: Отключен. Переподключение...';
+                amiStatusP.textContent = 'Статус AMI: Отключен.';
+                amiStatusP.style.color = 'red';
+                setTimeout(connectWebSocket, 3000); // Попытка переподключения
+            };
+
+            ws.onerror = error => {
+                console.error('Ошибка WebSocket:', error);
+                appendLog(amiEventsLogDiv, `Ошибка WebSocket: ${error.message || error}`, 'error');
+            };
+        }
+
+        // --- Обработчики событий аутентификации ---
+        loginBtn.addEventListener('click', async () => {
+            const username = usernameInput.value;
+            const password = passwordInput.value;
+
+            try {
+                const response = await fetch(`${backendUrl}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem('adminAuthToken', data.token);
+                    authToken = data.token;
+                    showMessage(authStatusDiv, data.message, 'success');
+                    // Если WebSocket уже подключен, отправляем токен для авторизации WS
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'auth', token: authToken }));
+                    } else {
+                        connectWebSocket(); // Иначе, подключаемся и авторизуемся
+                    }
+                } else {
+                    showMessage(authStatusDiv, data.message, 'error');
+                    localStorage.removeItem('adminAuthToken');
+                    authToken = null;
+                }
+            } catch (error) {
+                console.error('Ошибка входа:', error);
+                showMessage(authStatusDiv, `Ошибка входа: ${error.message}`, 'error');
+            }
+        });
+
+        registerBtn.addEventListener('click', async () => {
+            const username = usernameInput.value;
+            const password = passwordInput.value;
+
+            try {
+                const response = await fetch(`${backendUrl}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem('adminAuthToken', data.token);
+                    authToken = data.token;
+                    showMessage(authStatusDiv, data.message, 'success');
+                    // После регистрации также пытаемся подключиться и авторизоваться по WS
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'auth', token: authToken }));
+                    } else {
+                        connectWebSocket();
+                    }
+                } else {
+                    showMessage(authStatusDiv, data.message, 'error');
+                    localStorage.removeItem('adminAuthToken');
+                    authToken = null;
+                }
+            } catch (error) {
+                console.error('Ошибка регистрации:', error);
+                showMessage(authStatusDiv, `Ошибка регистрации: ${error.message}`, 'error');
+            }
+        });
+
+        // --- Обработчики событий AMI ---
+        sendAmiActionBtn.addEventListener('click', () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showMessage(amiResponseDiv, 'WebSocket не подключен.', 'error');
+                return;
+            }
+            const actionName = amiActionNameInput.value.trim();
+            const paramsString = amiActionParamsTextarea.value.trim();
+            let actionParams = {};
+
+            if (!actionName) {
+                showMessage(amiResponseDiv, 'Пожалуйста, введите название действия AMI.', 'error');
+                return;
+            }
+
+            if (paramsString) {
+                try {
+                    actionParams = JSON.parse(paramsString);
+                } catch (e) {
+                    showMessage(amiResponseDiv, 'Неверный формат JSON для параметров AMI.', 'error');
+                    return;
+                }
+            }
+
+            const amiAction = {
+                Action: actionName,
+                ...actionParams
+            };
+
+            ws.send(JSON.stringify({ type: 'ami_action', action: amiAction }));
+            appendLog(amiResponseDiv, `Отправлено AMI действие: ${actionName}`, 'info');
+        });
+
+        // --- Обработчики событий Конференции ---
+        joinConferenceBtn.addEventListener('click', () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showMessage(conferenceStatusDiv, 'WebSocket не подключен.', 'error');
+                return;
+            }
+            const conferenceName = conferenceNameInput.value.trim();
+            if (!conferenceName) {
+                showMessage(conferenceStatusDiv, 'Пожалуйста, введите имя конференции.', 'error');
+                return;
+            }
+            ws.send(JSON.stringify({ type: 'join_conference', conferenceName: conferenceName }));
+            appendLog(conferenceStatusDiv, `Запрос на присоединение к конференции ${conferenceName}.`, 'info');
+        });
+
+        // --- Обработчики событий ADB ---
+        function updateAdbDeviceList(devices) {
+            adbDeviceSelect.innerHTML = ''; // Очищаем текущий список
+            if (devices && devices.length > 0) {
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    option.textContent = `${device.id} (${device.type})`;
+                    adbDeviceSelect.appendChild(option);
+                });
+            } else {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'Нет обнаруженных устройств ADB';
+                adbDeviceSelect.appendChild(option);
+            }
+        }
+
+        adbDialBtn.addEventListener('click', () => sendAdbAction('dial', adbDialNumberInput.value));
+        adbAnswerBtn.addEventListener('click', () => sendAdbAction('answer'));
+        adbHangupBtn.addEventListener('click', () => sendAdbAction('hangup'));
+
+        function sendAdbAction(actionType, value = null) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showMessage(adbResponseDiv, 'WebSocket не подключен.', 'error');
+                return;
+            }
+            const deviceId = adbDeviceSelect.value;
+            if (!deviceId) {
+                showMessage(adbResponseDiv, 'Пожалуйста, выберите устройство ADB.', 'error');
+                return;
+            }
+
+            ws.send(JSON.stringify({ type: 'adb_action', deviceId, actionType, value }));
+            appendLog(adbResponseDiv, `Отправлено ADB действие: ${actionType} на ${deviceId}.`, 'info');
+        }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            if (authToken) {
+                // Если токен есть, пытаемся сразу подключиться по WebSocket и авторизоваться
+                connectWebSocket();
+            } else {
+                // Если токена нет, показываем форму входа
+                showAuthSection();
+            }
+        });
+    </script>
+</body>
+</html>

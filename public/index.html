@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSS Installation Wizard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Мастер установки VSS</h1>
+
+        <div id="step1" class="card">
+            <h2>Шаг 1: Проверка зависимостей системы</h2>
+            <div class="card-content">
+                <p>Перед началом установки убедитесь, что все необходимые компоненты установлены:</p>
+                <div id="dependenciesStatus">
+                    <p>Загрузка статуса зависимостей...</p>
+                </div>
+            </div>
+            <div class="card-actions">
+                <button onclick="checkAllDependencies()">Проверить снова</button>
+                <button id="nextStep1Button" onclick="nextStep(2)" disabled>Далее</button>
+            </div>
+        </div>
+
+        <div id="step2" class="card hidden">
+            <h2>Шаг 2: Создание нового проекта VSS</h2>
+            <div class="card-content">
+                <p>Введите информацию о новом проекте:</p>
+                <div class="form-group">
+                    <label for="projectName">Название проекта:</label>
+                    <input type="text" id="projectName" placeholder="Мой VSS Проект" required>
+                </div>
+
+                <h3>Настройка портов</h3>
+                <div class="form-group port-group">
+                    <label for="nginxPort">Порт Nginx (Веб-сервер):</label>
+                    <input type="number" id="nginxPort" value="8080" required>
+                </div>
+                <div class="form-group port-group">
+                    <label for="backendPort">Порт Backend:</label>
+                    <input type="number" id="backendPort" required>
+                </div>
+                <div class="form-group port-group">
+                    <label for="frontendPort">Порт Frontend:</label>
+                    <input type="number" id="frontendPort" required>
+                </div>
+                <div class="form-group port-group">
+                    <label for="mikopbxPort">Порт MikoPBX:</label>
+                    <input type="number" id="mikopbxPort" required>
+                </div>
+                <button onclick="generatePorts()">Сгенерировать свободные порты</button>
+
+                <h3>Дополнительные компоненты</h3>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="includeMikopbx" checked>
+                    <label for="includeMikopbx">Включить MikoPBX</label>
+                </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="includePostgres">
+                    <label for="includePostgres">Включить PostgreSQL</label>
+                </div>
+
+                <div id="postgresSettings" class="hidden">
+                    <h4>Настройки PostgreSQL</h4>
+                    <div class="form-group">
+                        <label for="dbName">Имя базы данных:</label>
+                        <input type="text" id="dbName" placeholder="vss_database" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="dbUser">Пользователь БД:</label>
+                        <input type="text" id="dbUser" placeholder="vss_user" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="dbPassword">Пароль БД:</label>
+                        <input type="password" id="dbPassword" placeholder="**********" required>
+                    </div>
+                     <div class="form-group port-group">
+                        <label for="dbPort">Порт PostgreSQL:</label>
+                        <input type="number" id="dbPort" required>
+                    </div>
+                    <button onclick="generateDbCredentials()">Сгенерировать данные БД</button>
+                </div>
+
+            </div>
+            <div class="card-actions">
+                <button onclick="prevStep(1)">Назад</button>
+                <button onclick="generateProject()">Создать проект</button>
+            </div>
+        </div>
+
+        <div id="step3" class="card hidden">
+            <h2>Шаг 3: Управление проектами</h2>
+            <div class="card-content">
+                <p>Здесь вы можете управлять вашими развернутыми VSS проектами.</p>
+                <div id="projectList">
+                    <p>Загрузка проектов...</p>
+                </div>
+            </div>
+            <div class="card-actions">
+                <button onclick="loadProjects()">Обновить список проектов</button>
+            </div>
+
+            <hr> <div class="card-content">
+                <h3>Загрузить Docker образ</h3>
+                <div class="form-group">
+                    <label for="dockerImageName">Имя образа (например, nginx:latest):</label>
+                    <input type="text" id="dockerImageName" placeholder="nginx:latest">
+                </div>
+                <button onclick="pullDockerImage()">Загрузить образ</button>
+            </div>
+
+            <hr> <div class="card-content">
+                <h3>Создать пользователя VSS для текущего проекта</h3>
+                <p>Выберите проект из списка выше, чтобы создать для него пользователя.</p>
+                <div class="form-group">
+                    <label for="vssUsername">Имя пользователя:</label>
+                    <input type="text" id="vssUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="vssPassword">Пароль:</label>
+                    <input type="password" id="vssPassword" required>
+                </div>
+                <button id="createUserButton" disabled>Создать пользователя</button>
+            </div>
+
+        </div>
+
+        <div class="card-actions" style="margin-top: 20px; justify-content: center;">
+            <a href="/dashboard" class="button">Перейти к управлению проектами (Dashboard)</a>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+version: '3.8'
+services:
+  nginx:
+    container_name: "nginx-${PROJECT_ID}"
+    image: nginx:alpine
+    ports:
+      - "${NGINX_PORT}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+  frontend:
+    container_name: "frontend-${PROJECT_ID}"
+    build:
+      context: ./frontend
+      dockerfile: ../frontend.Dockerfile # Путь к Dockerfile относительно compose файла
+    ports:
+      - "${FRONTEND_PORT}:3000" # Внутренний порт, который слушает React (обычно 3000)
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  backend:
+    container_name: "backend-${PROJECT_ID}"
+    build:
+      context: ./backend
+      dockerfile: ../backend.Dockerfile # Путь к Dockerfile относительно compose файла
+    ports:
+      - "${BACKEND_PORT}:3001" # Внутренний порт, который слушает Node.js backend (по умолчанию 3001)
+    restart: unless-stopped
+    environment:
+      # Общие переменные окружения для бэкенда
+      APP_PORT: 3001 # Порт, на котором слушает само Node.js приложение внутри контейнера
+      NODE_ENV: production
+# DB_ENV_VARS_PLACEHOLDER
+    depends_on:
+# DB_DEPENDENCY_PLACEHOLDER
+
+# DB_SERVICE_PLACEHOLDER
+
+# MIKOPBX_FIRST_SERVICE_PLACEHOLDER
+
+# MIKOPBX_SECOND_SERVICE_PLACEHOLDER
+
+volumes:
+# DB_VOLUME_PLACEHOLDER

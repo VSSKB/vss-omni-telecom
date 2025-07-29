@@ -1,0 +1,28 @@
+/* CreateProjectPage.css */
+
+/* Можно переиспользовать стили из App.css или HomePage.css */
+.create-project-page {
+    /* Дополнительные стили, если нужны конкретно для CreateProjectPage */
+    max-width: 700px; /* Немного уже, чем Home Page */
+    margin: 40px auto;
+    padding: 20px;
+}
+
+.create-project-page h1 {
+    margin-bottom: 30px;
+}
+
+.db-details {
+    background-color: #f0f8ff;
+    border: 1px solid #cceeff;
+    border-radius: 5px;
+    padding: 15px;
+    margin-top: 20px;
+    margin-bottom: 25px;
+}
+
+.db-details h4 {
+    color: #0056b3;
+    margin-top: 0;
+    margin-bottom: 15px;
+}

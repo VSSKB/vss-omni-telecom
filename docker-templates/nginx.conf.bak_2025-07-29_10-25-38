@@ -1,0 +1,31 @@
+# /root/install-wizard/docker-templates/nginx.conf
+# Nginx конфигурация для проксирования запросов
+
+server {
+    listen 80;
+    server_name localhost; # Можно изменить на ваш домен/IP
+
+    location / {
+        root /usr/share/nginx/html;
+        index index.html index.htm;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Проксирование API запросов на бэкенд
+    location /api/ {
+        proxy_pass http://backend:3001; # backend - это имя сервиса в docker-compose, 3001 - внутренний порт бэкенда
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Если MikoPBX включен, можно добавить проксирование для него
+    # location /mikopbx/ {
+    #    proxy_pass http://mikopbx:80;
+    #    proxy_set_header Host $host;
+    #    proxy_set_header X-Real-IP $remote_addr;
+    #    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #    proxy_set_header X-Forwarded-Proto $scheme;
+    # }
+}

@@ -1,0 +1,1088 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const path = require('path');
+const fs = require('fs').promises; // Используем promisified fs
+const { v4: uuidv4 } = require('uuid');
+const { exec, spawn } = require('child_process'); // Добавляем spawn для потоковой передачи
+const os = require('os');
+const net = require('net');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Разрешить запросы со всех доменов (для разработки)
+        methods: ["GET", "POST"]
+    }
+});
+
+const PORT = 3000;
+
+// Базовые директории для управления проектами
+const PROJECTS_BASE_DIR = path.join(__dirname, 'projects');
+const DB_DATA_BASE_DIR = path.join(__dirname, 'db_data');
+
+// Директории шаблонов, которые будут копироваться в каждый новый проект
+const TEMPLATES_DIR = path.join(__dirname, 'docker-templates');
+const BACKEND_TEMPLATE_DIR = path.join(__dirname, 'backend'); // Обновлено
+const FRONTEND_APP_TEMPLATE_DIR = path.join(TEMPLATES_DIR, 'frontend-app-template');
+const FRONTEND_BUILD_DIR = path.join(FRONTEND_APP_TEMPLATE_DIR, 'build'); // Путь к сбилженному фронтенду
+
+// --- Фиксированные порты для MikoPBX инстансов ---
+// Эти порты будут исключены из диапазона поиска findAvailablePort
+const MIKOPBX_FIRST_FIXED_PORTS = {
+    ssh: 123,
+    web: 8080,
+    https: 8443,
+    sip: 5060,
+    tls: 5061,
+    rtpFrom: 10000,
+    rtpTo: 10800,
+    iax: 4569,
+    ami: 5038,
+    ajam: 8088,
+    ajamTls: 8089,
+    beanstalk: 4229,
+    redis: 6379,
+    gnats: 4223
+};
+
+const MIKOPBX_SECOND_FIXED_PORTS = {
+    ssh: 2223,
+    web: 8081,
+    https: 9443,
+    sip: 6060,
+    tls: 6061,
+    rtpFrom: 20000,
+    rtpTo: 20800,
+    iax: 5569,
+    ami: 6038,
+    ajam: 9088,
+    ajamTls: 9089,
+    beanstalk: 5229,
+    redis: 7379,
+    gnats: 5223
+};
+
+app.use(bodyParser.json());
+// Добавляем обслуживание статичных файлов из папки 'public' (для самого сервера-установщика)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Добавляем обслуживание статичных файлов из билда фронтенда-установщика (нашего React-приложения)
+app.use(express.static(FRONTEND_BUILD_DIR));
+
+
+async function ensureDirectoriesExist() {
+    try {
+        await fs.mkdir(PROJECTS_BASE_DIR, { recursive: true });
+        await fs.mkdir(DB_DATA_BASE_DIR, { recursive: true });
+        console.log('Основные директории для проектов и данных БД созданы или уже существуют.');
+
+        // Проверяем наличие необходимых шаблонов
+        const requiredTemplates = [
+            'docker-compose.yml.template',
+            'backend.Dockerfile',
+            'frontend.Dockerfile',
+            'nginx.conf',
+        ];
+
+        for (const template of requiredTemplates) {
+            const templatePath = path.join(TEMPLATES_DIR, template);
+            try {
+                await fs.access(templatePath);
+            } catch (error) {
+                console.error(`Ошибка: Необходимый файл шаблона не найден: ${templatePath}`);
+                console.error('Пожалуйста, убедитесь, что все файлы шаблонов находятся в директории:', TEMPLATES_DIR);
+                process.exit(1);
+            }
+        }
+        console.log('Шаблоны Docker проверены и готовы к использованию.');
+
+        // Проверяем наличие шаблона бэкенда
+        try {
+            await fs.access(BACKEND_TEMPLATE_DIR);
+            await fs.access(path.join(BACKEND_TEMPLATE_DIR, 'Dockerfile'));
+            await fs.access(path.join(BACKEND_TEMPLATE_DIR, 'index.js'));
+            await fs.access(path.join(BACKEND_TEMPLATE_DIR, 'package.json'));
+            console.log('Шаблон Backend-приложения проверен и готов к использованию.');
+        } catch (error) {
+            console.error(`Ошибка: Необходимый шаблон Backend не найден или неполный: ${BACKEND_TEMPLATE_DIR}`);
+            console.error('Пожалуйста, убедитесь, что директория /root/install-wizard/backend/ содержит Dockerfile, index.js и package.json');
+            process.exit(1);
+        }
+
+        // Проверяем наличие шаблона фронтенда (для установки)
+        const requiredFrontendFilesForTemplate = ['package.json', 'public', 'src', 'src/App.js', 'src/App.css', 'src/index.js', 'src/ProjectDetailsPage.js', 'src/ProjectDetailsPage.css'];
+        const newFrontendFilesForTemplate = ['src/HomePage.js', 'src/HomePage.css', 'src/CreateProjectPage.js', 'src/DependenciesCheckPage.js'];
+        const allRequiredFrontendFilesForTemplate = [...requiredFrontendFilesForTemplate, ...newFrontendFilesForTemplate];
+
+        for (const file of allRequiredFrontendFilesForTemplate) {
+            const filePath = path.join(FRONTEND_APP_TEMPLATE_DIR, file);
+            try {
+                await fs.access(filePath);
+            } catch (error) {
+                console.error(`Ошибка: Необходимый файл/директория для шаблона Frontend не найден: ${filePath}`);
+                console.error('Пожалуйста, убедитесь, что вы скопировали содержимое базового React-приложения (созданного через \`npx create-react-app\`) и все новые файлы (App.css, HomePage.js, HomePage.css, ProjectDetailsPage.js, ProjectDetailsPage.css, CreateProjectPage.js, DependenciesCheckPage.js) в директорию:', FRONTEND_APP_TEMPLATE_DIR);
+                process.exit(1);
+            }
+        }
+        console.log('Шаблон Frontend-приложения проверен и готов к использованию.');
+
+        // Проверяем наличие папки 'build' у фронтенда-установщика
+        try {
+            await fs.access(FRONTEND_BUILD_DIR);
+            console.log('Директория билда Frontend-приложения (установщика) найдена.');
+        } catch (error) {
+            console.error(`Критическая ошибка: Директория билда Frontend-приложения (установщика) не найдена: ${FRONTEND_BUILD_DIR}`);
+            console.error('Пожалуйста, выполните `npm run build` в директории `/root/install-wizard/docker-templates/frontend-app-template/`');
+            process.exit(1);
+        }
+
+    } catch (error) {
+        console.error('Критическая ошибка при проверке директорий или шаблонов:', error);
+        process.exit(1);
+    }
+}
+
+// Вспомогательная функция для выполнения команд shell
+function executeCommand(command, options = {}) {
+    return new Promise((resolve, reject) => {
+        exec(command, options, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`Ошибка выполнения команды: ${command}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
+                return reject(new Error(`Command failed: ${command}\nStdout: ${stdout}\nStderr: ${stderr}`));
+            }
+            if (stderr) {
+                console.warn(`Предупреждение выполнения команды: ${command}\nstderr:\n${stderr}`);
+            }
+            resolve(stdout);
+        });
+    });
+}
+
+// Измененная функция для поиска доступных портов с исключением
+async function findAvailablePort(startPort, endPort, excludePorts = []) {
+    for (let port = startPort; port <= endPort; port++) {
+        // Проверяем, не находится ли порт в списке исключений
+        if (excludePorts.includes(port)) {
+            // console.log(`[Port Scan] Порт ${port} исключен из поиска (зарезервирован для MikoPBX).`);
+            continue;
+        }
+        try {
+            await new Promise((resolve, reject) => {
+                const testServer = net.createServer();
+                testServer.once('error', (err) => {
+                    testServer.close();
+                    reject(err || new Error(`Порт ${port} занят или другая сетевая ошибка`));
+                });
+                testServer.once('listening', () => {
+                    testServer.close();
+                    resolve();
+                });
+                testServer.listen(port, '127.0.0.1');
+            });
+            // console.log(`[Port Scan] Найден свободный порт: ${port}`);
+            return port;
+        } catch (e) {
+            if (e.code === 'EADDRINUSE') {
+                // console.log(`[Port Scan] Порт ${port} занят, ищем другой.`);
+            } else {
+                console.error(`[Port Scan] Ошибка при проверке порта ${port}: ${e.message}`);
+            }
+        }
+    }
+    throw new Error('Не найдено свободных портов в указанном диапазоне.');
+}
+
+
+// --- API ЭНДПОИНТЫ ---
+
+app.get('/api/check-dependencies', async (req, res) => {
+    const dependencies = [];
+
+    try {
+        const dockerVersion = await executeCommand('docker --version');
+        dependencies.push({ name: 'Docker', status: 'Установлено', version: dockerVersion.split('\n')[0].trim() });
+    } catch (error) {
+        dependencies.push({ name: 'Docker', status: 'Не установлен', error: error.message, version: 'N/A' });
+    }
+
+    try {
+        const dockerComposeVersion = await executeCommand('docker-compose --version');
+        dependencies.push({ name: 'Docker Compose', status: 'Установлен', version: dockerComposeVersion.split('\n')[0].trim() });
+    } catch (error) {
+        dependencies.push({ name: 'Docker Compose', status: 'Не установлен', error: error.message, version: 'N/A' });
+    }
+
+    try {
+        const nodeVersion = await executeCommand('node -v');
+        dependencies.push({ name: 'Node.js', status: 'Установлен', version: nodeVersion.trim() });
+    } catch (error) {
+        dependencies.push({ name: 'Node.js', status: 'Не установлен', error: error.message, version: 'N/A' });
+    }
+
+    res.json(dependencies);
+});
+
+app.get('/api/generate-available-ports', async (req, res) => {
+    try {
+        // Объединяем все фиксированные порты MikoPBX в один список для исключения
+        const allFixedMikopbxPorts = [
+            ...Object.values(MIKOPBX_FIRST_FIXED_PORTS),
+            ...Object.values(MIKOPBX_SECOND_FIXED_PORTS)
+        ].filter(port => typeof port === 'number' && port > 0); // Убедимся, что это числа и они валидны
+
+        const nginxPort = await findAvailablePort(8080, 8100, allFixedMikopbxPorts);
+        const backendPort = await findAvailablePort(3001, 3020, allFixedMikopbxPorts);
+        const frontendPort = await findAvailablePort(3000, 3020, allFixedMikopbxPorts); // Это порт внутри Docker
+        const dbPort = await findAvailablePort(5432, 5450, allFixedMikopbxPorts); // Добавляем порт БД
+
+        res.json({ nginxPort, backendPort, frontendPort, dbPort });
+    } catch (error) {
+        console.error('Ошибка при генерации доступных портов:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/generate-db-credentials', async (req, res) => {
+    try {
+        const dbName = `vss_db_${uuidv4().substring(0, 8)}`;
+        const dbUser = `vss_user_${uuidv4().substring(0, 4)}`;
+        const dbPassword = uuidv4().replace(/-/g, '').substring(0, 16);
+
+        res.json({ dbName, dbUser, dbPassword });
+    } catch (error) {
+        console.error('Ошибка при генерации данных БД:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/generate-project', async (req, res) => {
+    const {
+        projectName,
+        nginxPort,
+        backendPort,
+        frontendPort,
+        includeMikopbxFirst,
+        includeMikopbxSecond,
+        includePostgres,
+        dbName,
+        dbUser,
+        dbPassword,
+        dbPort
+     } = req.body;
+
+    const projectId = uuidv4();
+    const projectDir = path.join(PROJECTS_BASE_DIR, projectId);
+    const configFilePath = path.join(projectDir, 'config.json');
+    const composeFilePath = path.join(projectDir, 'docker-compose.yml');
+
+    try {
+        await fs.mkdir(projectDir, { recursive: true });
+        console.log(`[Generate Project] Создана директория проекта: ${projectDir}`);
+
+        // Копируем Dockerfile'ы и nginx.conf
+        await fs.copyFile(path.join(TEMPLATES_DIR, 'backend.Dockerfile'), path.join(projectDir, 'backend.Dockerfile'));
+        await fs.copyFile(path.join(TEMPLATES_DIR, 'frontend.Dockerfile'), path.join(projectDir, 'frontend.Dockerfile'));
+        await fs.copyFile(path.join(TEMPLATES_DIR, 'nginx.conf'), path.join(projectDir, 'nginx.conf'));
+
+        // Копируем шаблон Backend (со всем содержимым)
+        console.log(`[Generate Project] Копирование содержимого шаблона Backend из ${BACKEND_TEMPLATE_DIR} в ${path.join(projectDir, 'backend')}...`);
+        await fs.mkdir(path.join(projectDir, 'backend'), { recursive: true });
+        await executeCommand(`cp -a "${BACKEND_TEMPLATE_DIR}/." "${path.join(projectDir, 'backend')}/"`);
+        console.log(`[Generate Project] Шаблон Backend-приложения скопирован.`);
+
+        // Копируем шаблон Frontend (со всем содержимым, исключая node_modules и build)
+        console.log(`[Generate Project] Копирование содержимого шаблона Frontend из ${FRONTEND_APP_TEMPLATE_DIR} в ${path.join(projectDir, 'frontend')}...`);
+        await fs.mkdir(path.join(projectDir, 'frontend'), { recursive: true });
+        // Используем rsync для копирования с исключением node_modules и build
+        await executeCommand(`rsync -av --exclude 'node_modules/' --exclude 'build/' "${FRONTEND_APP_TEMPLATE_DIR}/" "${path.join(projectDir, 'frontend')}/"`);
+        console.log(`[Generate Project] Шаблон Frontend-приложения скопирован.`);
+
+
+        let composeTemplate = await fs.readFile(path.join(TEMPLATES_DIR, 'docker-compose.yml.template'), 'utf8');
+
+        // Глобальные замены
+        composeTemplate = composeTemplate
+            .replace(/\$\{NGINX_PORT\}/g, nginxPort)
+            .replace(/\$\{BACKEND_PORT\}/g, backendPort)
+            .replace(/\$\{FRONTEND_PORT\}/g, frontendPort)
+            .replace(/\$\{PROJECT_ID\}/g, projectId);
+
+        let mikopbxFirstServiceBlock = '';
+        let mikopbxSecondServiceBlock = '';
+        let mikopbxFirstEnvVars = '';
+        let mikopbxSecondEnvVars = '';
+        let postgresServiceBlock = '';
+        let dbEnvVars = '';
+        let dbDependency = '';
+        let dbVolumeDefinition = '';
+
+        const userInfo = os.userInfo();
+        const currentUserId = userInfo.uid || 1000;
+        const currentGroupId = userInfo.gid || 1000;
+
+        if (includeMikopbxFirst) {
+            console.log(`[Generate Project] Добавление сервиса MikoPBX First для проекта ${projectId} с host network mode.`);
+            // Создаем директории для томов MikoPBX First
+            const mikopbxFirstCfDir = path.join(projectDir, 'mikopbx-first-data', 'cf');
+            const mikopbxFirstStorageDir = path.join(projectDir, 'mikopbx-first-data', 'storage');
+            await fs.mkdir(mikopbxFirstCfDir, { recursive: true });
+            await fs.mkdir(mikopbxFirstStorageDir, { recursive: true });
+            console.log(`[Generate Project] Созданы директории для томов MikoPBX First: ${mikopbxFirstCfDir}, ${mikopbxFirstStorageDir}`);
+
+
+            mikopbxFirstServiceBlock = `
+  mikopbx-first:
+    container_name: "mikopbx-first-${projectId.substring(0, 8)}"
+    image: "ghcr.io/mikopbx/mikopbx-x86-64"
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+    entrypoint: "/sbin/docker-entrypoint"
+    hostname: "mikopbx-in-docker-first-${projectId.substring(0,4)}"
+    volumes:
+      - ${mikopbxFirstCfDir}:/cf
+      - ${mikopbxFirstStorageDir}:/storage
+    tty: true
+    environment:
+      - ID_WWW_USER=${currentUserId}
+      - ID_WWW_GROUP=${currentGroupId}
+      - PBX_NAME=MikoPBXFirst-${projectId.substring(0,4)}
+      - PBX_FIREWALL_ENABLED=0
+      - PBX_FAIL2BAN_ENABLED=0
+      - SSH_PORT=${MIKOPBX_FIRST_FIXED_PORTS.ssh}
+      - WEB_PORT=${MIKOPBX_FIRST_FIXED_PORTS.web}
+      - WEB_HTTPS_PORT=${MIKOPBX_FIRST_FIXED_PORTS.https}
+      - SIP_PORT=${MIKOPBX_FIRST_FIXED_PORTS.sip}
+      - TLS_PORT=${MIKOPBX_FIRST_FIXED_PORTS.tls}
+      - RTP_PORT_FROM=${MIKOPBX_FIRST_FIXED_PORTS.rtpFrom}
+      - RTP_PORT_TO=${MIKOPBX_FIRST_FIXED_PORTS.rtpTo}
+      - IAX_PORT=${MIKOPBX_FIRST_FIXED_PORTS.iax}
+      - AMI_PORT=${MIKOPBX_FIRST_FIXED_PORTS.ami}
+      - AJAM_PORT=${MIKOPBX_FIRST_FIXED_PORTS.ajam}
+      - AJAM_PORT_TLS=${MIKOPBX_FIRST_FIXED_PORTS.ajamTls}
+      - BEANSTALK_PORT=${MIKOPBX_FIRST_FIXED_PORTS.beanstalk}
+      - REDIS_PORT=${MIKOPBX_FIRST_FIXED_PORTS.redis}
+      - GNATS_PORT=${MIKOPBX_FIRST_FIXED_PORTS.gnats}
+`;
+            mikopbxFirstEnvVars = `      MIKOPBX_FIRST_HOST_SSH_PORT: ${MIKOPBX_FIRST_FIXED_PORTS.ssh}
+      MIKOPBX_FIRST_HOST_WEB_PORT: ${MIKOPBX_FIRST_FIXED_PORTS.web}
+      MIKOPBX_FIRST_HOST_HTTPS_PORT: ${MIKOPBX_FIRST_FIXED_PORTS.https}
+`;
+        }
+
+        if (includeMikopbxSecond) {
+            console.log(`[Generate Project] Добавление сервиса MikoPBX Second для проекта ${projectId} с host network mode.`);
+            // Создаем директории для томов MikoPBX Second
+            const mikopbxSecondCfDir = path.join(projectDir, 'mikopbx-second-data', 'cf');
+            const mikopbxSecondStorageDir = path.join(projectDir, 'mikopbx-second-data', 'storage');
+            await fs.mkdir(mikopbxSecondCfDir, { recursive: true });
+            await fs.mkdir(mikopbxSecondStorageDir, { recursive: true });
+            console.log(`[Generate Project] Созданы директории для томов MikoPBX Second: ${mikopbxSecondCfDir}, ${mikopbxSecondStorageDir}`);
+
+            mikopbxSecondServiceBlock = `
+  mikopbx-second:
+    container_name: "mikopbx-second-${projectId.substring(0, 8)}"
+    image: "ghcr.io/mikopbx/mikopbx-x86-64"
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+    entrypoint: "/sbin/docker-entrypoint"
+    hostname: "mikopbx-in-docker-second-${projectId.substring(0,4)}"
+    volumes:
+      - ${mikopbxSecondCfDir}:/cf
+      - ${mikopbxSecondStorageDir}:/storage
+    tty: true
+    environment:
+      - ID_WWW_USER=${currentUserId}
+      - ID_WWW_GROUP=${currentGroupId}
+      - PBX_NAME=MikoPBXSecond-${projectId.substring(0,4)}
+      - PBX_FIREWALL_ENABLED=0
+      - PBX_FAIL2BAN_ENABLED=0
+      - SSH_PORT=${MIKOPBX_SECOND_FIXED_PORTS.ssh}
+      - WEB_PORT=${MIKOPBX_SECOND_FIXED_PORTS.web}
+      - WEB_HTTPS_PORT=${MIKOPBX_SECOND_FIXED_PORTS.https}
+      - SIP_PORT=${MIKOPBX_SECOND_FIXED_PORTS.sip}
+      - TLS_PORT=${MIKOPBX_SECOND_FIXED_PORTS.tls}
+      - RTP_PORT_FROM=${MIKOPBX_SECOND_FIXED_PORTS.rtpFrom}
+      - RTP_PORT_TO=${MIKOPBX_SECOND_FIXED_PORTS.rtpTo}
+      - IAX_PORT=${MIKOPBX_SECOND_FIXED_PORTS.iax}
+      - AMI_PORT=${MIKOPBX_SECOND_FIXED_PORTS.ami}
+      - AJAM_PORT=${MIKOPBX_SECOND_FIXED_PORTS.ajam}
+      - AJAM_PORT_TLS=${MIKOPBX_SECOND_FIXED_PORTS.ajamTls}
+      - BEANSTALK_PORT=${MIKOPBX_SECOND_FIXED_PORTS.beanstalk}
+      - REDIS_PORT=${MIKOPBX_SECOND_FIXED_PORTS.redis}
+      - GNATS_PORT=${MIKOPBX_SECOND_FIXED_PORTS.gnats}
+`;
+            mikopbxSecondEnvVars = `      MIKOPBX_SECOND_HOST_SSH_PORT: ${MIKOPBX_SECOND_FIXED_PORTS.ssh}
+      MIKOPBX_SECOND_HOST_WEB_PORT: ${MIKOPBX_SECOND_FIXED_PORTS.web}
+      MIKOPBX_SECOND_HOST_HTTPS_PORT: ${MIKOPBX_SECOND_FIXED_PORTS.https}
+`;
+        }
+
+
+        let dbConfig = null;
+        if (includePostgres) {
+            console.log(`[Generate Project] Добавление сервиса PostgreSQL для проекта ${projectId}.`);
+            dbConfig = { dbName, dbUser, dbPassword, dbPort };
+
+            postgresServiceBlock = `
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${dbName}
+      POSTGRES_USER: ${dbUser}
+      POSTGRES_PASSWORD: ${dbPassword}
+    volumes:
+      - ${projectId}_db_data:/var/lib/postgresql/data
+    ports:
+      - "${dbPort}:5432"
+`;
+            dbEnvVars = `      DB_HOST: db
+      DB_NAME: ${dbName}
+      DB_USER: ${dbUser}
+      DB_PASSWORD: ${dbPassword}
+      DB_PORT: 5432
+`;
+            dbDependency = `      - db
+`;
+
+            dbVolumeDefinition = `
+  ${projectId}_db_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${path.join(DB_DATA_BASE_DIR, projectId, 'db_data')}
+`;
+            await fs.mkdir(path.join(DB_DATA_BASE_DIR, projectId, 'db_data'), { recursive: true });
+            console.log(`[Generate Project] Создана директория для данных БД: ${path.join(DB_DATA_BASE_DIR, projectId, 'db_data')}`);
+
+        }
+
+        composeTemplate = composeTemplate
+            .replace(/# MIKOPBX_FIRST_SERVICE_PLACEHOLDER/, mikopbxFirstServiceBlock)
+            .replace(/# MIKOPBX_FIRST_ENV_VARS_PLACEHOLDER/, mikopbxFirstEnvVars)
+            .replace(/# MIKOPBX_SECOND_SERVICE_PLACEHOLDER/, mikopbxSecondServiceBlock)
+            .replace(/# MIKOPBX_SECOND_ENV_VARS_PLACEHOLDER/, mikopbxSecondEnvVars)
+            .replace(/# DB_SERVICE_PLACEHOLDER/, postgresServiceBlock)
+            .replace(/# DB_ENV_VARS_PLACEHOLDER/, dbEnvVars)
+            .replace(/# DB_DEPENDENCY_PLACEHOLDER/, dbDependency)
+            .replace(/# DB_VOLUME_PLACEHOLDER/, dbVolumeDefinition);
+
+        // Удаляем неиспользованные плейсхолдеры и убираем лишние пустые строки
+        composeTemplate = composeTemplate.split('\n')
+                                       .filter(line => !line.trim().startsWith('#') || line.trim() === '') // Удаляем комментарии-плейсхолдеры
+                                       .filter((line, index, arr) => {
+                                           // Пропускаем пустые строки, если предыдущая тоже была пустой
+                                           if (line.trim() === '' && index > 0 && arr[index - 1].trim() === '') {
+                                               return false;
+                                           }
+                                           return true;
+                                       })
+                                       .join('\n');
+
+
+        await fs.writeFile(composeFilePath, composeTemplate);
+        console.log(`[Generate Project] Сгенерирован docker-compose.yml для проекта ${projectId}`);
+
+        const projectConfig = {
+            id: projectId,
+            projectName,
+            nginxPort,
+            backendPort,
+            frontendPort,
+            includeMikopbxFirst,
+            mikopbxFirstFixedPorts: includeMikopbxFirst ? MIKOPBX_FIRST_FIXED_PORTS : null,
+            includeMikopbxSecond,
+            mikopbxSecondFixedPorts: includeMikopbxSecond ? MIKOPBX_SECOND_FIXED_PORTS : null,
+            includePostgres,
+            db: dbConfig,
+            projectPath: projectDir,
+            projectUrl: `http://localhost:${nginxPort}`
+        };
+        await fs.writeFile(configFilePath, JSON.stringify(projectConfig, null, 2));
+        console.log(`[Generate Project] Сохранена конфигурация проекта ${projectId}.`);
+
+        res.status(200).json({ message: 'Проект успешно сгенерирован!', projectId });
+
+    } catch (error) {
+        console.error(`[Generate Project] Ошибка при генерации проекта ${projectName} (ID: ${projectId}):`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+app.get('/api/projects', async (req, res) => {
+    try {
+        const projectIds = await fs.readdir(PROJECTS_BASE_DIR, { withFileTypes: true });
+        const projectDirs = projectIds.filter(dirent => dirent.isDirectory()).map(dirent => dirent.name);
+        console.log('[Load Projects] Найденные директории проектов:', projectDirs);
+
+        const projects = [];
+        for (const id of projectDirs) {
+            try {
+                const configPath = path.join(PROJECTS_BASE_DIR, id, 'config.json');
+                const configContent = await fs.readFile(configPath, 'utf8');
+                const config = JSON.parse(configContent);
+                projects.push({ id: config.id, projectName: config.projectName || `Проект ${id}` });
+            } catch (readError) {
+                console.warn(`[Load Projects] Файл конфигурации не найден для проекта ${id}. Добавление как поврежденный. Ошибка: ${readError.message}`);
+                projects.push({ id: id, projectName: `Проект ${id} (error)` });
+            }
+        }
+        console.log('[Load Projects] Отправлен список проектов.');
+        res.json(projects);
+    } catch (error) {
+        console.error('[Load Projects] Ошибка при получении списка проектов:', error);
+        res.status(500).json({ error: 'Не удалось загрузить список проектов.' });
+    }
+});
+
+app.get('/api/project-details/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    const projectDir = path.join(PROJECTS_BASE_DIR, projectId);
+    const configPath = path.join(projectDir, 'config.json');
+    const composeFilePath = path.join(projectDir, 'docker-compose.yml');
+
+    try {
+        const configContent = await fs.readFile(configPath, 'utf8');
+        const projectConfig = JSON.parse(configContent);
+
+        let projectStatus = 'unknown';
+        let serviceStatus = {};
+        let projectUrl = projectConfig.projectUrl;
+
+        try {
+            await fs.access(composeFilePath);
+
+            // Получаем статусы всех сервисов, которые должны быть в docker-compose.yml
+            const allServicesOutput = await executeCommand(`docker-compose -f "${composeFilePath}" config --services`, { cwd: projectDir });
+            const allServices = allServicesOutput.split('\n').map(s => s.trim()).filter(s => s);
+
+            if (allServices.length === 0) {
+                 projectStatus = 'empty_compose';
+                 serviceStatus = { error: 'docker-compose.yml не содержит сервисов.' };
+            } else {
+                // Получаем список запущенных/здоровых сервисов
+                const psOutput = await executeCommand(`docker-compose -f "${composeFilePath}" ps --services --status=running --status=healthy --status=restarting`, { cwd: projectDir });
+                const runningAndOtherServices = psOutput.split('\n').map(s => s.trim()).filter(s => s);
+
+                // Получаем список остановленных/созданных сервисов
+                const stoppedPsOutput = await executeCommand(`docker-compose -f "${composeFilePath}" ps --services --status=exited --status=dead --status=created`, { cwd: projectDir });
+                const stoppedServices = stoppedPsOutput.split('\n').map(s => s.trim()).filter(s => s);
+
+                let anyRunning = false;
+                let anyStopped = false;
+
+                allServices.forEach(service => {
+                    if (runningAndOtherServices.includes(service)) {
+                        serviceStatus[service] = 'running'; // Обобщаем как 'running'
+                        anyRunning = true;
+                    } else if (stoppedServices.includes(service)) {
+                        serviceStatus[service] = 'stopped';
+                        anyStopped = true;
+                    } else {
+                        serviceStatus[service] = 'unknown';
+                    }
+                });
+
+                if (anyRunning && !anyStopped) {
+                    projectStatus = 'running';
+                } else if (anyRunning && anyStopped) {
+                    projectStatus = 'partial_running';
+                } else if (!anyRunning && anyStopped) {
+                    projectStatus = 'stopped';
+                } else {
+                    projectStatus = 'unknown';
+                }
+            }
+
+        } catch (composeError) {
+            console.error(`[Project Details] Ошибка при получении статуса Docker Compose для ${composeFilePath}: ${composeError.message}`);
+            if (composeError.message.includes('yaml.parser.ParserError') || composeError.message.includes("do not match any of the regexes: '^x-'") || composeError.message.includes("mapping values are not allowed here")) {
+                projectStatus = 'configuration_error';
+                serviceStatus = { error: 'Ошибка синтаксиса Docker Compose файла. Проверьте отступы.' };
+            } else if (composeError.message.includes('No such file or directory') || composeError.code === 'ENOENT') {
+                projectStatus = 'compose_file_missing';
+                serviceStatus = { error: 'Файл docker-compose.yml не найден.' };
+            }
+            else {
+                projectStatus = 'error';
+                serviceStatus = { error: composeError.message };
+            }
+        }
+
+        res.json({
+            ...projectConfig,
+            status: projectStatus,
+            serviceStatus: serviceStatus,
+            projectUrl: projectUrl
+        });
+
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            console.warn(`[Project Details] Файл конфигурации не найден для проекта ${projectId}.`);
+            return res.status(404).json({ error: 'Конфигурация проекта не найдена.' });
+        }
+        console.error(`[Project Details] Ошибка при получении деталей проекта ${projectId}:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/start-project', async (req, res) => {
+    const { projectId } = req.body;
+    const projectDir = path.join(PROJECTS_BASE_DIR, projectId);
+    const composeFilePath = path.join(projectDir, 'docker-compose.yml');
+
+    try {
+        await fs.access(composeFilePath);
+
+        console.log(`[Start Project] Запуск Docker Compose для проекта ${projectId} в ${projectDir}...`);
+        // Используем spawn для форсированного --build и передачи потоков
+        const child = spawn('docker-compose', ['-f', composeFilePath, 'up', '-d', '--build'], { cwd: projectDir });
+
+        child.stdout.on('data', (data) => {
+            io.to(projectId).emit('project_log', data.toString());
+        });
+
+        child.stderr.on('data', (data) => {
+            io.to(projectId).emit('project_log', `[STDERR] ${data.toString()}`);
+        });
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                console.log(`[Start Project] Docker Compose запущен для проекта ${projectId}.`);
+                io.to(projectId).emit('project_log', `\n--- Проект ${projectId} успешно запущен. ---\n`);
+            } else {
+                console.error(`[Start Project] Docker Compose завершился с ошибкой ${code} для проекта ${projectId}.`);
+                io.to(projectId).emit('project_log', `\n--- Ошибка запуска проекта ${projectId}: код ${code}. ---\n`);
+            }
+            io.to(projectId).emit('command_finished'); // Уведомляем фронтенд об окончании команды
+        });
+
+        child.on('error', (err) => {
+            console.error(`[Start Project] Ошибка при запуске docker-compose для ${projectId}: ${err.message}`);
+            io.to(projectId).emit('project_log', `\n--- Ошибка при запуске: ${err.message} ---\n`);
+            io.to(projectId).emit('command_finished');
+        });
+
+        res.status(200).json({ message: `Команда запуска проекта ${projectId} отправлена.` });
+    } catch (error) {
+        console.error(`[Start Project] Ошибка при подготовке запуска проекта ${projectId}:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/stop-project', async (req, res) => {
+    const { projectId } = req.body;
+    const projectDir = path.join(PROJECTS_BASE_DIR, projectId);
+    const composeFilePath = path.join(projectDir, 'docker-compose.yml');
+
+    try {
+        await fs.access(composeFilePath);
+
+        console.log(`[Stop Project] Остановка Docker Compose для проекта ${projectId} в ${projectDir}...`);
+        const child = spawn('docker-compose', ['-f', composeFilePath, 'down', '--volumes', '--remove-orphans'], { cwd: projectDir });
+
+        child.stdout.on('data', (data) => {
+            io.to(projectId).emit('project_log', data.toString());
+        });
+
+        child.stderr.on('data', (data) => {
+            io.to(projectId).emit('project_log', `[STDERR] ${data.toString()}`);
+        });
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                console.log(`[Stop Project] Docker Compose остановлен для проекта ${projectId}.`);
+                io.to(projectId).emit('project_log', `\n--- Проект ${projectId} успешно остановлен. ---\n`);
+            } else {
+                console.error(`[Stop Project] Docker Compose завершился с ошибкой ${code} для проекта ${projectId}.`);
+                io.to(projectId).emit('project_log', `\n--- Ошибка остановки проекта ${projectId}: код ${code}. ---\n`);
+            }
+            io.to(projectId).emit('command_finished');
+        });
+
+        child.on('error', (err) => {
+            console.error(`[Stop Project] Ошибка при запуске docker-compose down для ${projectId}: ${err.message}`);
+            io.to(projectId).emit('project_log', `\n--- Ошибка при остановке: ${err.message} ---\n`);
+            io.to(projectId).emit('command_finished');
+        });
+
+        res.status(200).json({ message: `Команда остановки проекта ${projectId} отправлена.` });
+    } catch (error) {
+        console.error(`[Stop Project] Ошибка при подготовке остановки проекта ${projectId}:`, error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/delete-project', async (req, res) => {
+    const { projectId } = req.body;
+    const projectDir = path.join(PROJECTS_BASE_DIR, projectId);
+    const composeFilePath = path.join(projectDir, 'docker-compose.yml');
+    const dbDataDir = path.join(DB_DATA_BASE_DIR, projectId);
+
+    try {
+        io.to(projectId).emit('project_log', `\n--- Запуск удаления проекта ${projectId} ---\n`);
+
+        try {
+            console.log(`[Delete Project] Пытаемся остановить Docker Compose перед удалением для проекта ${projectId}.`);
+            io.to(projectId).emit('project_log', `Остановка Docker Compose...`);
+            const stopOutput = await executeCommand(`docker-compose -f "${composeFilePath}" down --volumes --remove-orphans --timeout 0`, { cwd: projectDir });
+            console.log(`[Delete Project] Docker Compose успешно остановлен для ${projectId}:\n${stopOutput}`);
+            io.to(projectId).emit('project_log', `Docker Compose остановлен.\n`);
+        } catch (stopError) {
+            console.warn(`[Delete Project] Не удалось остановить Docker Compose для ${projectId} (возможно, он не запущен, файла нет или другая проблема): ${stopError.message}`);
+            io.to(projectId).emit('project_log', `Предупреждение: Не удалось остановить Docker Compose (${stopError.message}). Продолжаем удаление.\n`);
+        }
+
+        io.to(projectId).emit('project_log', `Удаление директории проекта: ${projectDir}...`);
+        await fs.rm(projectDir, { recursive: true, force: true });
+        console.log(`[Delete Project] Директория проекта ${projectId} удалена: ${projectDir}`);
+        io.to(projectId).emit('project_log', `Директория проекта удалена.\n`);
+
+
+        try {
+            await fs.access(dbDataDir);
+            io.to(projectId).emit('project_log', `Удаление директории данных БД: ${dbDataDir}...`);
+            await fs.rm(dbDataDir, { recursive: true, force: true });
+            console.log(`[Delete Project] Директория данных БД для ${projectId} удалена: ${dbDataDir}`);
+            io.to(projectId).emit('project_log', `Директория данных БД удалена.\n`);
+        } catch (dbDirError) {
+            if (dbDirError.code === 'ENOENT') {
+                console.log(`[Delete Project] Директория данных БД ${dbDataDir} не существует, пропущено удаление.`);
+                io.to(projectId).emit('project_log', `Директория данных БД не существует. Пропущено.\n`);
+            } else {
+                console.warn(`[Delete Project] Ошибка при удалении директории данных БД для ${projectId}: ${dbDirError.message}`);
+                io.to(projectId).emit('project_log', `Ошибка при удалении директории данных БД: ${dbDirError.message}.\n`);
+            }
+        }
+        io.to(projectId).emit('project_log', `\n--- Проект ${projectId} и связанные данные успешно удалены. ---\n`);
+        io.to(projectId).emit('command_finished');
+        res.status(200).json({ message: `Проект ${projectId} и связанные данные успешно удалены.` });
+
+    } catch (error) {
+        console.error(`[Delete Project] Ошибка при удалении проекта ${projectId}:`, error);
+        io.to(projectId).emit('project_log', `\n--- Критическая ошибка при удалении проекта: ${error.message} ---\n`);
+        io.to(projectId).emit('command_finished');
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/delete-postgres', async (req, res) => {
+    const { projectId } = req.body;
+    const projectDir = path.join(PROJECTS_BASE_DIR, projectId);
+    const configPath = path.join(projectDir, 'config.json');
+    const composeFilePath = path.join(projectDir, 'docker-compose.yml');
+    const dbDataDir = path.join(DB_DATA_BASE_DIR, projectId);
+
+    try {
+        const configContent = await fs.readFile(configPath, 'utf8');
+        const projectConfig = JSON.parse(configContent);
+
+        if (!projectConfig.includePostgres) {
+            return res.status(400).json({ error: 'PostgreSQL не включен в этот проект.' });
+        }
+
+        io.to(projectId).emit('project_log', `\n--- Запуск удаления PostgreSQL из проекта ${projectId} ---\n`);
+
+        try {
+            io.to(projectId).emit('project_log', `Остановка и удаление сервиса БД 'db'...`);
+            await executeCommand(`docker-compose -f "${composeFilePath}" stop db`, { cwd: projectDir });
+            await executeCommand(`docker-compose -f "${composeFilePath}" rm -s -v db`, { cwd: projectDir });
+            console.log(`[Delete Postgres] Сервис БД и его тома успешно удалены для проекта ${projectId}.`);
+            io.to(projectId).emit('project_log', `Сервис БД успешно удален.\n`);
+        } catch (stopRmError) {
+            console.warn(`[Delete Postgres] Ошибка при остановке/удалении Docker-сервиса 'db' для ${projectId}: ${stopRmError.message}`);
+            io.to(projectId).emit('project_log', `Ошибка при удалении сервиса БД: ${stopRmError.message}. Продолжаем.\n`);
+        }
+
+        try {
+            await fs.access(dbDataDir);
+            io.to(projectId).emit('project_log', `Удаление директории данных БД: ${dbDataDir}...`);
+            await fs.rm(dbDataDir, { recursive: true, force: true });
+            console.log(`[Delete Postgres] Директория данных БД для ${projectId} удалена: ${dbDataDir}`);
+            io.to(projectId).emit('project_log', `Директория данных БД удалена.\n`);
+        } catch (dbDirError) {
+            if (dbDirError.code === 'ENOENT') {
+                console.log(`[Delete Postgres] Директория данных БД ${dbDataDir} не существует, пропущено удаление.`);
+                io.to(projectId).emit('project_log', `Директория данных БД не существует. Пропущено.\n`);
+            } else {
+                console.warn(`[Delete Postgres] Ошибка при удалении директории данных БД для ${projectId}: ${dbDirError.message}`);
+                io.to(projectId).emit('project_log', `Ошибка при удалении директории данных БД: ${dbDirError.message}.\n`);
+            }
+        }
+
+        let composeContent = await fs.readFile(composeFilePath, 'utf8');
+
+        // Удаление блока сервиса 'db'
+        composeContent = composeContent.replace(/(\n\s{2}db:\n(?:\s{4}.*\n)*?)(?=\n\s{2}\S|$)/gm, '');
+        // Удаление зависимости от 'db'
+        composeContent = composeContent.replace(/(\n\s{6}- db\n)/g, '');
+        // Удаление переменных окружения БД
+        composeContent = composeContent.replace(/(\n\s{6}DB_HOST: db[\s\S]*?\n\s{6}DB_PORT: \d+\n)/g, '');
+        // Удаление определения тома БД
+        composeContent = composeContent.replace(new RegExp(`\\n\\s{2}${projectId}_db_data:\\n(?:\\s{4}.*\\n)*?`, 'gm'), '');
+
+        // Очистка лишних пустых строк и комментариев
+        composeContent = composeContent.split('\n')
+                                       .filter(line => !line.trim().startsWith('#') || line.trim() === '')
+                                       .filter((line, index, arr) => {
+                                           if (line.trim() === '' && index > 0 && arr[index - 1].trim() === '') {
+                                               return false;
+                                           }
+                                           return true;
+                                       })
+                                       .join('\n');
+
+        await fs.writeFile(composeFilePath, composeContent);
+        console.log(`[Delete Postgres] docker-compose.yml обновлен для проекта ${projectId} (PostgreSQL удален).`);
+        io.to(projectId).emit('project_log', `docker-compose.yml обновлен. PostgreSQL удален из конфигурации.\n`);
+
+        projectConfig.includePostgres = false;
+        projectConfig.db = null;
+        await fs.writeFile(configPath, JSON.stringify(projectConfig, null, 2));
+        console.log(`[Delete Postgres] Конфигурация проекта ${projectId} обновлена.`);
+        io.to(projectId).emit('project_log', `Конфигурация проекта обновлена.\n`);
+
+        io.to(projectId).emit('project_log', `Перезапуск оставшихся сервисов Docker Compose...`);
+        const restartChild = spawn('docker-compose', ['-f', composeFilePath, 'up', '-d', '--build'], { cwd: projectDir });
+
+        restartChild.stdout.on('data', (data) => {
+            io.to(projectId).emit('project_log', data.toString());
+        });
+        restartChild.stderr.on('data', (data) => {
+            io.to(projectId).emit('project_log', `[STDERR] ${data.toString()}`);
+        });
+        restartChild.on('close', (code) => {
+            if (code === 0) {
+                io.to(projectId).emit('project_log', `\n--- Оставшиеся сервисы для проекта ${projectId} перезапущены. ---\n`);
+            } else {
+                io.to(projectId).emit('project_log', `\n--- Ошибка при перезапуске оставшихся сервисов (${code}). ---\n`);
+            }
+            io.to(projectId).emit('command_finished');
+        });
+        restartChild.on('error', (err) => {
+            io.to(projectId).emit('project_log', `\n--- Ошибка при перезапуске: ${err.message} ---\n`);
+            io.to(projectId).emit('command_finished');
+        });
+
+        res.status(200).json({ message: `PostgreSQL успешно удален из проекта ${projectId}.` });
+
+    } catch (error) {
+        console.error(`[Delete Postgres] Ошибка при удалении PostgreSQL из проекта ${projectId}:`, error);
+        io.to(projectId).emit('project_log', `\n--- Критическая ошибка при удалении PostgreSQL: ${error.message} ---\n`);
+        io.to(projectId).emit('command_finished');
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/create-vss-user', async (req, res) => {
+    const { projectId, username, password } = req.body;
+
+    console.log(`[Create VSS User] Попытка создания пользователя для проекта ${projectId}: ${username} / ${password}`);
+
+    try {
+        const projectDir = path.join(PROJECTS_BASE_DIR, projectId);
+        const configPath = path.join(projectDir, 'config.json');
+        const configContent = await fs.readFile(configPath, 'utf8');
+        const projectConfig = JSON.parse(configContent);
+
+        if (!projectConfig.includePostgres) {
+            return res.status(400).json({ error: 'Для создания пользователя VSS требуется PostgreSQL в проекте.' });
+        }
+
+        // --- Реальная логика создания пользователя VSS здесь ---
+        // Это будет зависеть от того, как вы взаимодействуете с вашим VSS бэкендом.
+        // Например, если ваш бэкенд на Node.js и у него есть API для создания пользователей:
+        // const backendUrl = `http://localhost:${projectConfig.backendPort}/api/vss-users`;
+        // const response = await fetch(backendUrl, {
+        //     method: 'POST',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify({ username, password }),
+        // });
+        // if (!response.ok) {
+        //     const errorData = await response.json();
+        //     throw new Error(errorData.message || 'Failed to create VSS user via backend API');
+        // }
+        // const data = await response.json();
+        // res.status(200).json({ message: data.message });
+        // --- End of real logic example ---
+
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Симуляция задержки
+        res.status(200).json({ message: `Пользователь '${username}' успешно создан для проекта ${projectId}. (Симуляция)` });
+
+    } catch (error) {
+        console.error(`[Create VSS User] Ошибка при создании пользователя VSS для проекта ${projectId}:`, error);
+        res.status(500).json({ error: `Не удалось создать пользователя VSS: ${error.message}` });
+    }
+});
+
+app.post('/api/pull-docker-image', async (req, res) => {
+    const { imageName, projectId } = req.body;
+
+    if (!imageName) {
+        return res.status(400).json({ error: 'Имя Docker образа не указано.' });
+    }
+
+    console.log(`[Pull Docker Image] Попытка загрузки Docker образа "${imageName}" (инициировано из проекта ${projectId || 'глобально'}).`);
+    // Отправляем логи в комнату проекта, если projectId предоставлен
+    if (projectId) {
+        io.to(projectId).emit('project_log', `\n--- Запуск загрузки Docker образа: ${imageName} ---\n`);
+    }
+
+    const child = spawn('docker', ['pull', imageName]);
+
+    child.stdout.on('data', (data) => {
+        if (projectId) {
+            io.to(projectId).emit('project_log', data.toString());
+        } else {
+            console.log(`[Global Pull] ${data.toString().trim()}`);
+        }
+    });
+
+    child.stderr.on('data', (data) => {
+        if (projectId) {
+            io.to(projectId).emit('project_log', `[STDERR] ${data.toString()}`);
+        } else {
+            console.error(`[Global Pull ERR] ${data.toString().trim()}`);
+        }
+    });
+
+    child.on('close', (code) => {
+        if (code === 0) {
+            console.log(`[Pull Docker Image] Образ ${imageName} успешно загружен.`);
+            if (projectId) {
+                io.to(projectId).emit('project_log', `\n--- Образ ${imageName} успешно загружен. ---\n`);
+            }
+            res.status(200).json({ message: `Образ ${imageName} успешно загружен.` });
+        } else {
+            console.error(`[Pull Docker Image] Загрузка образа ${imageName} завершилась с ошибкой ${code}.`);
+            if (projectId) {
+                io.to(projectId).emit('project_log', `\n--- Ошибка загрузки образа ${imageName}: код ${code}. ---\n`);
+            }
+            res.status(500).json({ error: `Не удалось загрузить образ ${imageName}: код ${code}.` });
+        }
+        if (projectId) {
+            io.to(projectId).emit('command_finished');
+        }
+    });
+
+    child.on('error', (err) => {
+        console.error(`[Pull Docker Image] Ошибка при запуске docker pull ${imageName}: ${err.message}`);
+        if (projectId) {
+            io.to(projectId).emit('project_log', `\n--- Ошибка при загрузке образа: ${err.message} ---\n`);
+            io.to(projectId).emit('command_finished');
+        }
+        res.status(500).json({ error: `Не удалось запустить команду pull для ${imageName}: ${err.message}` });
+    });
+});
+
+
+// --- WebSocket для логов Docker Compose ---
+const projectLogRooms = new Map(); // Карта для отслеживания процессов логов по projectId
+
+io.on('connection', (socket) => {
+    console.log('Клиент Socket.IO подключен:', socket.id);
+
+    // Слушаем запрос на начало трансляции логов для конкретного проекта
+    socket.on('request_logs', async (projectId) => {
+        console.log(`Получен запрос логов для проекта: ${projectId} от ${socket.id}`);
+        const projectDir = path.join(PROJECTS_BASE_DIR, projectId);
+        const composeFilePath = path.join(projectDir, 'docker-compose.yml');
+
+        // Добавляем сокет в комнату проекта
+        socket.join(projectId);
+
+        // Если уже есть процесс логов для этого проекта, убиваем его и запускаем новый
+        if (projectLogRooms.has(projectId)) {
+            console.log(`Останавливаем предыдущий процесс логов для ${projectId}`);
+            projectLogRooms.get(projectId).kill();
+            projectLogRooms.delete(projectId);
+        }
+
+        try {
+            await fs.access(composeFilePath);
+
+            // Запускаем docker-compose logs в режиме следования (--follow или -f)
+            const logCommand = `docker-compose -f "${composeFilePath}" logs -f`;
+            console.log(`Запуск команды логов: ${logCommand}`);
+
+            const child = exec(logCommand, { cwd: projectDir });
+
+            child.stdout.on('data', (data) => {
+                io.to(projectId).emit('project_log', data.toString());
+            });
+
+            child.stderr.on('data', (data) => {
+                io.to(projectId).emit('project_log', `[STDERR] ${data.toString()}`);
+            });
+
+            child.on('close', (code) => {
+                console.log(`Процесс логов для ${projectId} завершился с кодом ${code}`);
+                io.to(projectId).emit('project_log', `\n--- Процесс логов завершился (${code}) ---\n`);
+                projectLogRooms.delete(projectId);
+            });
+
+            child.on('error', (err) => {
+                console.error(`Ошибка при запуске процесса логов для ${projectId}: ${err.message}`);
+                io.to(projectId).emit('project_log', `\n--- Ошибка при получении логов: ${err.message} ---\n`);
+                projectLogRooms.delete(projectId);
+            });
+
+            projectLogRooms.set(projectId, child); // Сохраняем процесс
+            io.to(projectId).emit('project_log', `\n--- Начало трансляции логов для проекта ${projectId} ---\n`);
+
+
+        } catch (error) {
+            console.error(`Ошибка при подготовке логов для ${projectId}: ${error.message}`);
+            io.to(projectId).emit('project_log', `\n--- Не удалось получить логи: ${error.message} ---\n`);
+        }
+    });
+
+    // Очистка при отключении клиента или смене проекта
+    socket.on('stop_logs', (projectId) => {
+        console.log(`Получен запрос на остановку логов для проекта: ${projectId} от ${socket.id}`);
+        if (projectLogRooms.has(projectId)) {
+            console.log(`Останавливаем процесс логов для ${projectId}`);
+            projectLogRooms.get(projectId).kill();
+            projectLogRooms.delete(projectId);
+            io.to(projectId).emit('project_log', `\n--- Трансляция логов остановлена вручную. ---\n`);
+        }
+        socket.leave(projectId); // Выходим из комнаты проекта
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Клиент Socket.IO отключен:', socket.id);
+        // При отключении клиента, останавливаем все процессы логов, связанные с этим клиентом
+        // Это более сложная логика, т.к. один процесс может быть связан с несколькими клиентами через комнаты
+        // Для простоты, если клиент отключается, мы можем остановить логи, которые он запрашивал,
+        // но лучше, если клиент явно шлет 'stop_logs' при уходе со страницы проекта.
+        // Или отслеживать сокеты в каждой комнате.
+        // В текущей реализации, `projectLogRooms` хранит один процесс на projectId.
+        // Если один клиент отключился, а другой все еще смотрит логи того же проекта, логи могут остановиться.
+        // Для этого нужно, чтобы projectLogRooms хранила массив сокетов на projectId, или отдельный map для каждого сокета.
+        // Но для текущей задачи это, вероятно, избыточно. Оставляем как есть, но это может быть точкой улучшения.
+    });
+});
+
+// Обработка всех остальных маршрутов, чтобы React Router мог управлять ими
+app.get('*', (req, res) => {
+    res.sendFile(path.join(FRONTEND_BUILD_DIR, 'index.html'));
+});
+
+
+async function startServer() {
+    await ensureDirectoriesExist();
+    server.listen(PORT, () => {
+        console.log(`Сервер запущен на http://localhost:${PORT}`);
+        console.log(`Откройте http://localhost:${PORT} в вашем браузере.`);
+    });
+}
+
+startServer();

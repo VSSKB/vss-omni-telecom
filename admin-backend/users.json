@@ -1,0 +1,18 @@
+[
+  // Этот файл будет автоматически заполнен тестовыми пользователями ('user' и 'admin')
+  // при первом запуске сервера, если он не существует или пуст.
+  //
+  // Пример того, как могут выглядеть данные после регистрации/первого запуска:
+  // {
+  //   "user": {
+  //     "password": "$2b$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // Хешированный пароль для 'pass'
+  //     "token": "a1b2c3d4-e5f6-7890-1234-abcdefabcdef",
+  //     "roles": ["default", "ami_monitor"]
+  //   },
+  //   "admin": {
+  //     "password": "$2b$10$YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY", // Хешированный пароль для 'adminpass'
+  //     "token": "b2c3d4e5-f6a7-8901-2345-fedcbafedcba",
+  //     "roles": ["admin", "ami_full_access", "adb_full_access"]
+  //   }
+  // }
+]

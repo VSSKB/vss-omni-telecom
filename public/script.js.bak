@@ -1,0 +1,439 @@
+// /root/install-wizard/public/script.js
+
+let currentStep = 1;
+
+const dependenciesStatus = {
+    docker: { installed: false, version: '' },
+    dockerCompose: { installed: false, version: '' },
+    nodejs: { installed: false, version: '' }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    showStep(currentStep);
+    // На Шаге 1 сразу запускаем проверку зависимостей
+    if (currentStep === 1) {
+        checkAllDependencies();
+    }
+    // На Шаге 3 сразу загружаем проекты
+    // Этот блок не должен быть активен при старте, если текущий шаг не 3
+    if (currentStep === 3) { // Эта проверка на всякий случай, если currentStep вдруг не 1
+        loadProjects();
+    }
+
+    // Привязка обработчиков событий к чекбоксам для PostgreSQL
+    const includePostgresCheckbox = document.getElementById('includePostgres');
+    const postgresSettingsDiv = document.getElementById('postgresSettings');
+    if (includePostgresCheckbox && postgresSettingsDiv) {
+        includePostgresCheckbox.addEventListener('change', (event) => {
+            if (event.target.checked) {
+                postgresSettingsDiv.classList.remove('hidden');
+                // Добавляем атрибут required для полей БД, когда они активны
+                postgresSettingsDiv.querySelectorAll('input').forEach(input => {
+                    input.setAttribute('required', 'required');
+                });
+            } else {
+                postgresSettingsDiv.classList.add('hidden');
+                // Удаляем атрибут required, когда поля неактивны
+                postgresSettingsDiv.querySelectorAll('input').forEach(input => {
+                    input.removeAttribute('required');
+                });
+            }
+        });
+    }
+
+    // Инициализация полей БД как скрытых, если чекбокс не выбран
+    if (postgresSettingsDiv && includePostgresCheckbox && !includePostgresCheckbox.checked) {
+        postgresSettingsDiv.classList.add('hidden');
+        postgresSettingsDiv.querySelectorAll('input').forEach(input => {
+            input.removeAttribute('required');
+        });
+    }
+});
+
+// Функция для отображения определенного шага мастера
+function showStep(step) {
+    document.querySelectorAll('.card').forEach(card => {
+        card.classList.add('hidden');
+    });
+    document.getElementById(`step${step}`).classList.remove('hidden');
+    currentStep = step;
+
+    // Дополнительная логика при смене шага
+    if (step === 1) {
+        checkAllDependencies(); // Перепроверяем зависимости при возврате на Шаг 1
+    } else if (step === 3) {
+        loadProjects(); // Загружаем проекты при переходе на Шаг 3
+    }
+}
+
+// Переход на следующий шаг
+function nextStep(stepNumber) {
+    showStep(stepNumber);
+}
+
+// Переход на предыдущий шаг
+function prevStep(stepNumber) {
+    showStep(stepNumber);
+}
+
+// Асинхронная функция для проверки всех зависимостей через API
+async function checkAllDependencies() {
+    const statusDiv = document.getElementById('dependenciesStatus');
+    const nextButton = document.getElementById('nextStep1Button');
+    if (statusDiv) statusDiv.innerHTML = '<p>Загрузка статуса зависимостей...</p>';
+    if (nextButton) nextButton.disabled = true;
+
+    try {
+        const response = await fetch('/api/check-dependencies');
+        const data = await response.json();
+
+        dependenciesStatus.docker = data.docker;
+        dependenciesStatus.dockerCompose = data.dockerCompose;
+        dependenciesStatus.nodejs = data.nodejs;
+
+        updateDependencyStatusUI();
+
+        if (data.allDependenciesMet) {
+            if (nextButton) nextButton.disabled = false;
+            console.log("Все зависимости успешно проверены.");
+        } else {
+            if (nextButton) nextButton.disabled = true;
+            console.log("Не все зависимости установлены.");
+        }
+    } catch (error) {
+        console.error('Ошибка при проверке зависимостей:', error);
+        if (statusDiv) statusDiv.innerHTML = '<p style="color: red;">Ошибка при загрузке статуса зависимостей. Проверьте сервер.</p>';
+        if (nextButton) nextButton.disabled = true;
+    }
+}
+
+// Функция для обновления UI статуса зависимостей
+function updateDependencyStatusUI() {
+    const statusDiv = document.getElementById('dependenciesStatus');
+    if (!statusDiv) return;
+
+    let htmlContent = `
+        <p>Docker: <span style="color: ${dependenciesStatus.docker.installed ? 'green' : 'red'};">${dependenciesStatus.docker.installed ? 'Установлено' : 'Не установлено'}</span> (Версия: ${dependenciesStatus.docker.version || 'Неизвестно'})</p>
+        <p>Docker Compose: <span style="color: ${dependenciesStatus.dockerCompose.installed ? 'green' : 'red'};">${dependenciesStatus.dockerCompose.installed ? 'Установлен' : 'Не установлен'}</span> (Версия: ${dependenciesStatus.dockerCompose.version || 'Неизвестно'})</p>
+        <p>Node.js: <span style="color: ${dependenciesStatus.nodejs.installed ? 'green' : 'red'};">${dependenciesStatus.nodejs.installed ? 'Установлен' : 'Не установлен'}</span> (Версия: ${dependenciesStatus.nodejs.version || 'Неизвестно'})</p>
+    `;
+
+    if (dependenciesStatus.docker.installed && dependenciesStatus.dockerCompose.installed && dependenciesStatus.nodejs.installed) {
+        htmlContent += '<p style="color: green; font-weight: bold;">Все зависимости успешно проверены.</p>';
+    } else {
+        htmlContent += '<p style="color: red;">Пожалуйста, установите или настройте все необходимые зависимости.</p>';
+    }
+    statusDiv.innerHTML = htmlContent;
+}
+
+// =======================================================
+// Функции для Шага 2: Создание нового проекта
+// =======================================================
+
+async function generatePorts() {
+    try {
+        const response = await fetch('/api/generate-ports');
+        const ports = await response.json();
+
+        document.getElementById('nginxPort').value = ports.nginx;
+        document.getElementById('backendPort').value = ports.backend;
+        document.getElementById('frontendPort').value = ports.frontend;
+        document.getElementById('mikopbxPort').value = ports.mikopbx;
+        document.getElementById('dbPort').value = ports.db;
+    } catch (error) {
+        console.error('Ошибка при генерации портов:', error);
+        alert('Не удалось сгенерировать порты. Проверьте сервер.');
+    }
+}
+
+async function generateDbCredentials() {
+    const dbNameInput = document.getElementById('dbName');
+    const dbUserInput = document.getElementById('dbUser');
+    const dbPasswordInput = document.getElementById('dbPassword');
+    const dbPortInput = document.getElementById('dbPort');
+
+    const generateRandomString = (length) => {
+        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    };
+    const getRandomPort = () => Math.floor(Math.random() * (65535 - 10000 + 1)) + 10000;
+
+    dbNameInput.value = `vss_db_${generateRandomString(4).toLowerCase()}`;
+    dbUserInput.value = `user_${generateRandomString(3).toLowerCase()}`;
+    dbPasswordInput.value = generateRandomString(12);
+    dbPortInput.value = getRandomPort();
+
+    alert('Данные PostgreSQL сгенерированы.');
+}
+
+async function generateProject() {
+    const projectName = document.getElementById('projectName').value;
+    if (!projectName.trim()) {
+        alert('Пожалуйста, введите имя проекта.');
+        return;
+    }
+
+    const nginxPort = document.getElementById('nginxPort').value;
+    const backendPort = document.getElementById('backendPort').value;
+    const frontendPort = document.getElementById('frontendPort').value;
+    const mikopbxPort = document.getElementById('mikopbxPort').value;
+    
+    if (!nginxPort || !backendPort || !frontendPort || !mikopbxPort) {
+        alert('Пожалуйста, заполните все обязательные поля портов.');
+        return;
+    }
+
+    const includeMikopbx = document.getElementById('includeMikopbx').checked;
+    const includePostgres = document.getElementById('includePostgres').checked;
+
+    let dbData = undefined;
+    if (includePostgres) {
+        const dbName = document.getElementById('dbName').value;
+        const dbUser = document.getElementById('dbUser').value;
+        const dbPassword = document.getElementById('dbPassword').value;
+        const dbPort = document.getElementById('dbPort').value;
+
+        if (!dbName.trim() || !dbUser.trim() || !dbPassword.trim() || !dbPort.trim()) {
+            alert('Пожалуйста, заполните все обязательные поля для PostgreSQL.');
+            return;
+        }
+        dbData = { dbName, dbUser, dbPassword, dbPort: parseInt(dbPort) };
+    }
+
+    const projectData = {
+        projectName,
+        ports: {
+            nginx: parseInt(nginxPort),
+            backend: parseInt(backendPort),
+            frontend: parseInt(frontendPort),
+            mikopbx: parseInt(mikopbxPort)
+        },
+        includeMikopbx,
+        includePostgres,
+        db: dbData
+    };
+
+    try {
+        const response = await fetch('/api/generate-project', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(projectData)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            alert(`Проект "${result.projectName}" успешно сгенерирован! ID: ${result.projectId}`);
+            showStep(3); // Переход к Шагу 3: Управление проектами
+            loadProjects(); // Загрузить список новых проектов
+        } else {
+            alert(`Ошибка при генерации проекта: ${result.message || 'Неизвестная ошибка'}\nДетали: ${result.error || ''}`);
+            console.error('Ошибка генерации проекта:', result);
+        }
+    } catch (error) {
+        console.error('Ошибка при отправке запроса:', error);
+        alert('Произошла ошибка сети при попытке генерации проекта.');
+    }
+}
+
+// =======================================================
+// Функции для Шага 3: Управление проектами
+// =======================================================
+
+async function loadProjects() {
+    const projectListDiv = document.getElementById('projectList');
+    if (!projectListDiv) return;
+    projectListDiv.innerHTML = '<p>Загрузка проектов...</p>';
+
+    try {
+        const response = await fetch('/api/projects');
+        const projects = await response.json();
+
+        let projectsHtml = '';
+        if (projects.length === 0) {
+            projectsHtml = '<p>Проекты не найдены. Создайте новый проект на Шаге 2.</p>';
+        } else {
+            projectsHtml = projects.map(project => `
+                <div class="project-item">
+                    <span>Название проекта: ${project.name}<br>ID проекта: ${project.id}<br>Статус: <span style="color: ${project.status === 'running' ? 'green' : 'orange'};">${project.status}</span></span>
+                    <div class="project-actions">
+                        <button onclick="startProject('${project.id}')" ${project.status === 'running' ? 'disabled' : ''}>Старт</button>
+                        <button onclick="stopProject('${project.id}')" ${project.status === 'stopped' ? 'disabled' : ''}>Стоп</button>
+                        <button onclick="openAdminPanel('${project.id}', ${project.ports.nginx})">Перейти в админку</button>
+                        <button onclick="viewProjectLogs('${project.id}')">Просмотр логов</button>
+                        <button onclick="deleteProject('${project.id}')" class="button-danger">Удалить</button>
+                        <button onclick="showCreateUserModal('${project.id}')">Создать пользователя VSS</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        projectListDiv.innerHTML = projectsHtml;
+    } catch (error) {
+        console.error('Ошибка загрузки проектов:', error);
+        projectListDiv.innerHTML = '<p style="color: red;">Ошибка при загрузке проектов. Проверьте сервер.</p>';
+    }
+}
+
+async function startProject(projectId) {
+    try {
+        const response = await fetch(`/api/projects/${projectId}/start`, { method: 'POST' });
+        const result = await response.json();
+        if (response.ok) {
+            alert(result.message);
+            loadProjects();
+        } else {
+            alert(`Ошибка запуска: ${result.message}\nДетали: ${result.details || ''}`);
+            console.error('Ошибка запуска:', result);
+        }
+    } catch (error) {
+        console.error('Ошибка запуска проекта:', error);
+        alert('Ошибка сети при попытке запуска проекта.');
+    }
+}
+
+async function stopProject(projectId) {
+    try {
+        const response = await fetch(`/api/projects/${projectId}/stop`, { method: 'POST' });
+        const result = await response.json();
+        if (response.ok) {
+            alert(result.message);
+            loadProjects();
+        } else {
+            alert(`Ошибка остановки: ${result.message}\nДетали: ${result.details || ''}`);
+            console.error('Ошибка остановки:', result);
+        }
+    } catch (error) {
+        console.error('Ошибка остановки проекта:', error);
+        alert('Ошибка сети при попытке остановки проекта.');
+    }
+}
+
+async function deleteProject(projectId) {
+    if (confirm(`Вы уверены, что хотите удалить проект ${projectId}? Это действие необратимо.`)) {
+        try {
+            const response = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+            const result = await response.json();
+            if (response.ok) {
+                alert(result.message);
+                loadProjects();
+            } else {
+                alert(`Ошибка удаления: ${result.message || 'Неизвестная ошибка'}`);
+                console.error('Ошибка удаления:', result);
+            }
+        } catch (error) {
+            console.error('Ошибка удаления проекта:', error);
+            alert('Ошибка сети при попытке удаления проекта.');
+        }
+    }
+}
+
+// Новые функции для кнопок
+function openAdminPanel(projectId, nginxPort) {
+    const adminUrl = `http://${window.location.hostname}:${nginxPort}/admin`; // Или другой актуальный путь
+    window.open(adminUrl, '_blank');
+    alert(`Переход в админку проекта ${projectId} (на порт ${nginxPort}).`);
+    console.log(`Открытие админки для проекта ${projectId} по URL: ${adminUrl}`);
+}
+
+function viewProjectLogs(projectId) {
+    alert(`Просмотр логов для проекта ${projectId}. (Функция не реализована на фронтенде, требует бэкенд-API)`);
+    console.log(`Запрос на просмотр логов для проекта ${projectId}.`);
+    // Пример: fetch(`/api/projects/${projectId}/logs`).then(...)
+}
+
+// Модальное окно "Загрузить Docker образ"
+const pullDockerImageModal = document.getElementById('pullDockerImageModal');
+const confirmPullDockerImageButton = document.getElementById('confirmPullDockerImageButton');
+const modalDockerImageNameInput = document.getElementById('modalDockerImageName');
+
+function showPullDockerImageModal() {
+    if (pullDockerImageModal) pullDockerImageModal.classList.remove('hidden-modal');
+    if (confirmPullDockerImageButton) {
+        confirmPullDockerImageButton.onclick = async () => {
+            const imageName = modalDockerImageNameInput.value;
+            if (!imageName.trim()) {
+                alert('Пожалуйста, введите имя Docker образа.');
+                return;
+            }
+            try {
+                const response = await fetch('/api/pull-docker-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageName })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    alert(`Образ "${imageName}" успешно загружен.`);
+                } else {
+                    alert(`Ошибка загрузки образа: ${result.message || 'Неизвестная ошибка'}\nДетали: ${result.details || ''}`);
+                    console.error('Ошибка загрузки образа:', result);
+                }
+            } catch (error) {
+                console.error('Ошибка запроса загрузки образа:', error);
+                alert('Ошибка сети при попытке загрузки образа.');
+            } finally {
+                closePullDockerImageModal();
+            }
+        };
+    }
+}
+
+function closePullDockerImageModal() {
+    if (pullDockerImageModal) pullDockerImageModal.classList.add('hidden-modal');
+    if (modalDockerImageNameInput) modalDockerImageNameInput.value = '';
+}
+
+
+// Модальное окно "Создать пользователя VSS"
+const createUserModal = document.getElementById('createUserModal');
+const confirmCreateUserButton = document.getElementById('confirmCreateUserButton');
+const vssUsernameInput = document.getElementById('vssUsername');
+const vssPasswordInput = document.getElementById('vssPassword');
+let currentProjectIdForUser = null;
+
+function showCreateUserModal(projectId) {
+    currentProjectIdForUser = projectId;
+    if (createUserModal) createUserModal.classList.remove('hidden-modal');
+    if (confirmCreateUserButton) {
+        confirmCreateUserButton.onclick = async () => {
+            const username = vssUsernameInput.value;
+            const password = vssPasswordInput.value;
+            if (!username.trim() || !password.trim()) {
+                alert('Пожалуйста, введите имя пользователя и пароль.');
+                return;
+            }
+            try {
+                const response = await fetch('/api/create-vss-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, projectId: currentProjectIdForUser })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    alert(result.message);
+                } else {
+                    alert(`Ошибка создания пользователя: ${result.message || 'Неизвестная ошибка'}`);
+                    console.error('Ошибка создания пользователя:', result);
+                }
+            } catch (error) {
+                console.error('Ошибка запроса создания пользователя:', error);
+                alert('Ошибка сети при попытке создания пользователя.');
+            } finally {
+                closeCreateUserModal();
+            }
+        };
+    }
+}
+
+function closeCreateUserModal() {
+    if (createUserModal) createUserModal.classList.add('hidden-modal');
+    if (vssUsernameInput) vssUsernameInput.value = '';
+    if (vssPasswordInput) vssPasswordInput.value = '';
+    currentProjectIdForUser = null;
+}
