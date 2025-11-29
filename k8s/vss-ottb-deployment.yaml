@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vss-ottb
+  namespace: vss-production
+  labels:
+    app: vss-ottb
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vss-ottb
+  template:
+    metadata:
+      labels:
+        app: vss-ottb
+    spec:
+      containers:
+      - name: vss-ottb
+        image: registry.vss.io/vss-ottb:v2.1.0
+        ports:
+        - containerPort: 8083
+        env:
+        - name: POSTGRES_URL
+          valueFrom:
+            secretKeyRef:
+              name: vss-secrets
+              key: postgres-url
+        - name: RABBITMQ_URL
+          valueFrom:
+            secretKeyRef:
+              name: vss-secrets
+              key: rabbitmq-url
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8083
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8083
+          initialDelaySeconds: 10
+          periodSeconds: 5
+

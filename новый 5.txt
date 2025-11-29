@@ -1,0 +1,1776 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSS OMNI TELECOM</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!-- Custom CSS for Facebook-like styling and overrides -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif; /* Or 'Segoe UI', 'Helvetica Neue', Arial, sans-serif */
+            background-color: #f0f2f5; /* Facebook-like light gray */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 70px; /* Space for fixed header */
+        }
+        .container-fluid {
+            max-width: 960px; /* Max width for content, similar to Facebook */
+        }
+
+        /* Custom Colors (Facebook-like) */
+        :root {
+            --facebook-blue: #1877F2;
+            --facebook-gray: #F0F2F5;
+            --facebook-light-gray: #E4E6EB;
+            --adb-green: #34D399; /* Custom green for ADB */
+        }
+
+        .btn-facebook-blue {
+            background-color: var(--facebook-blue);
+            border-color: var(--facebook-blue);
+            color: white;
+        }
+        .btn-facebook-blue:hover {
+            background-color: #166FE5; /* Darker blue on hover */
+            border-color: #166FE5;
+            color: white;
+        }
+        .btn-outline-facebook-blue {
+            border-color: var(--facebook-blue);
+            color: var(--facebook-blue);
+        }
+        .btn-outline-facebook-blue:hover {
+            background-color: var(--facebook-light-gray);
+            color: var(--facebook-blue);
+        }
+
+        .card {
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .1), 0 8px 16px rgba(0, 0, 0, .1);
+            border: none; /* Remove default Bootstrap border */
+        }
+
+        .form-control:focus {
+            border-color: var(--facebook-blue);
+            box-shadow: 0 0 0 0.25rem rgba(24, 119, 242, 0.25);
+        }
+
+        /* Header Styling */
+        .app-header {
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030; /* Bootstrap navbar z-index */
+            padding: 10px 20px;
+        }
+        .app-header .navbar-brand {
+            color: var(--facebook-blue) !important;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        .app-header .user-info {
+            font-size: 0.9rem;
+            color: #65676B; /* Facebook text gray */
+        }
+        .app-header .logout-button {
+            color: #E02424; /* Red for logout */
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .app-header .logout-button:hover {
+            text-decoration: underline;
+        }
+
+        /* Tab Navigation Styling */
+        .nav-tabs {
+            border-bottom: none; /* Remove default border */
+            background-color: white;
+            border-radius: 8px 8px 0 0;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .1);
+            overflow-x: auto; /* Enable horizontal scrolling for many tabs */
+            flex-wrap: nowrap; /* Prevent tabs from wrapping */
+        }
+        .nav-tabs .nav-item {
+            flex-shrink: 0; /* Prevent tabs from shrinking */
+        }
+        .nav-tabs .nav-link {
+            border: none;
+            border-bottom: 3px solid transparent; /* Active indicator */
+            color: #65676B; /* Default tab text color */
+            font-weight: 500;
+            padding: 12px 20px;
+            transition: all 0.2s ease-in-out;
+        }
+        .nav-tabs .nav-link:hover {
+            color: var(--facebook-blue);
+            background-color: var(--facebook-light-gray);
+        }
+        .nav-tabs .nav-link.active {
+            color: var(--facebook-blue);
+            border-color: var(--facebook-blue);
+            background-color: white; /* Active tab background */
+            font-weight: bold;
+        }
+        .tab-content {
+            background-color: white;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .1);
+            padding: 20px;
+            border-top: none; /* Remove top border of content */
+        }
+
+        /* Auth Container with Background Image */
+        #auth-container {
+            background-image: url('https://placehold.co/1920x1080/E0E0E0/333333?text=VSS+OMNI+TELECOM+Background'); /* Placeholder image */
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        #auth-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.4); /* Dark overlay for better text readability */
+            z-index: 1;
+        }
+        #auth-container > .card { /* Target the inner card */
+            position: relative;
+            z-index: 2; /* Bring card to front of overlay */
+        }
+        #auth-container .card {
+            max-width: 400px;
+            width: 100%;
+            padding: 30px;
+        }
+        #auth-container .card h2 {
+            color: #1c1e21; /* Facebook dark text */
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        #auth-container .card p {
+            color: #65676B;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+        }
+        #auth-container .form-control {
+            border-radius: 6px;
+            padding: 12px 16px;
+            font-size: 1rem;
+        }
+        #auth-container .btn {
+            border-radius: 6px;
+            padding: 12px 16px;
+            font-size: 1.1rem;
+        }
+
+        /* Log Styling */
+        #logs {
+            background-color: #212529; /* Dark background for logs */
+            color: #28a745; /* Green text for logs */
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            height: 250px;
+            overflow-y: auto;
+            border-radius: 6px;
+            padding: 15px;
+            font-size: 0.85rem;
+        }
+        .log-entry {
+            margin-bottom: 3px;
+        }
+        .log-info { color: #adb5bd; } /* Light gray */
+        .log-error { color: #dc3545; background-color: #490000; } /* Red */
+        .log-ami-event { color: #ffc107; background-color: #332300; } /* Yellow */
+        .log-ami-response { color: #007bff; background-color: #001f40; } /* Blue */
+        .log-dtmf { color: #28a745; background-color: #0d331a; } /* Green */
+        .log-adb { color: var(--adb-green); background-color: #003322; } /* ADB Green */
+
+    </style>
+</head>
+<body>
+
+    <!-- Authentication Form -->
+    <div id="auth-container" class="fixed-top vw-100 vh-100 d-flex justify-content-center align-items-center z-3">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-2">VSS OMNI TELECOM</h2>
+                <p class="card-subtitle text-center text-muted mb-4">Victim Search System</p>
+                <div id="auth-message" class="alert alert-danger text-center d-none" role="alert"></div>
+                <div class="mb-3">
+                    <input type="text" id="auth-username" class="form-control" placeholder="Имя пользователя">
+                </div>
+                <div class="mb-4">
+                    <input type="password" id="auth-password" class="form-control" placeholder="Пароль">
+                </div>
+                <div class="d-grid gap-2 mb-3">
+                    <button id="login-button" class="btn btn-facebook-blue">Войти</button>
+                    <button id="register-button" class="btn btn-outline-facebook-blue">Зарегистрироваться</button>
+                </div>
+                <p class="text-center text-muted mt-3 mb-0" style="font-size: 0.85rem;">
+                    Для демонстрации, используйте любое имя пользователя и пароль.
+                    <br>
+                    Например: user / pass
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application Content (Hidden until authenticated) -->
+    <div id="app-container" class="container-fluid py-4 d-none">
+        <!-- Header -->
+        <header class="app-header d-flex justify-content-between align-items-center">
+            <a class="navbar-brand" href="#">VSS OMNI TELECOM</a>
+            <div class="user-info d-flex align-items-center">
+                Привет, <span id="logged-in-username" class="fw-semibold ms-1 me-2"></span>!
+                <button id="logout-button" class="logout-button btn btn-link p-0">Выйти</button>
+            </div>
+        </header>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <!-- Navigation Tabs -->
+                <ul class="nav nav-tabs" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="ws-tab" data-bs-toggle="tab" data-bs-target="#ws-page" type="button" role="tab" aria-controls="ws-page" aria-selected="true">WebSocket</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="adb-tab" data-bs-toggle="tab" data-bs-target="#adb-page" type="button" role="tab" aria-controls="adb-page" aria-selected="false">ADB Устройства</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="ami-tab" data-bs-toggle="tab" data-bs-target="#ami-page" type="button" role="tab" aria-controls="ami-page" aria-selected="false">Действия AMI</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="conf-tab" data-bs-toggle="tab" data-bs-target="#conf-page" type="button" role="tab" aria-controls="conf-page" aria-selected="false">Конференции & DTMF</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="links-tab" data-bs-toggle="tab" data-bs-target="#links-page" type="button" role="tab" aria-controls="links-page" aria-selected="false">Ссылки</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="audio-tab" data-bs-toggle="tab" data-bs-target="#audio-page" type="button" role="tab" aria-controls="audio-page" aria-selected="false">Аудио</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs-page" type="button" role="tab" aria-controls="logs-page" aria-selected="false">Логи</button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="myTabContent">
+                    <!-- WebSocket Connection Management -->
+                    <div class="tab-pane fade show active" id="ws-page" role="tabpanel" aria-labelledby="ws-tab">
+                        <h2 class="mb-4 text-gray-700">Настройки WebSocket Соединений</h2>
+                        <div id="wsConnectionsContainer" class="mb-4">
+                            <!-- Dynamic WebSocket connection inputs will go here -->
+                        </div>
+                        <button id="addWsConnectionButton" class="btn btn-outline-secondary mb-4">
+                            Добавить Новое Соединение
+                        </button>
+
+                        <div class="mb-4">
+                            <label for="activeWsSelect" class="form-label">Активное Соединение для Команд:</label>
+                            <select id="activeWsSelect" class="form-select">
+                                <!-- Options will be populated dynamically -->
+                            </select>
+                        </div>
+
+                        <div id="globalConnectionStatus" class="alert alert-secondary text-center fw-bold mb-2" role="alert">
+                            Общий статус: Отключено
+                        </div>
+                        <div id="globalAmiStatus" class="alert alert-secondary text-center fw-bold" role="alert">
+                            Статус AMI (активное): Неизвестно
+                        </div>
+
+                        <!-- SIP Account Management for Active Connection -->
+                        <div class="mt-5 pt-4 border-top">
+                            <h3 class="mb-4 text-gray-700">Управление SIP Аккаунтами (для активного соединения)</h3>
+                            <p class="text-muted mb-4">
+                                Добавьте до 3 SIP аккаунтов для текущего активного WebSocket соединения.
+                                Эти аккаунты будут сохранены локально в браузере.
+                            </p>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6 col-lg-3">
+                                    <input type="text" id="sipUsernameInput" class="form-control" placeholder="SIP Имя пользователя">
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <input type="password" id="sipPasswordInput" class="form-control" placeholder="SIP Пароль">
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <input type="text" id="sipServerInput" class="form-control" placeholder="SIP Сервер (например, asterisk.local)">
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <input type="number" id="sipPortInput" class="form-control" placeholder="Порт (например, 5060)" value="5060">
+                                </div>
+                                <div class="col-md-6">
+                                    <input type="text" id="sipDisplayNameInput" class="form-control" placeholder="Отображаемое имя (например, Мой SIP)">
+                                </div>
+                                <div class="col-md-6">
+                                    <select id="sipTransportSelect" class="form-select">
+                                        <option value="UDP">UDP</option>
+                                        <option value="TCP">TCP</option>
+                                        <option value="TLS">TLS</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <input type="text" id="sipOutboundProxyInput" class="form-control" placeholder="Исходящий прокси (опционально)">
+                                </div>
+                            </div>
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-start mb-4">
+                                <button id="addSipAccountButton" class="btn btn-primary">Добавить SIP Аккаунт</button>
+                                <button id="updateSipAccountButton" class="btn btn-success d-none">Обновить SIP Аккаунт</button>
+                                <button id="cancelEditSipAccountButton" class="btn btn-outline-secondary d-none">Отмена</button>
+                            </div>
+                            
+                            <div id="sipAccountsList" class="list-group">
+                                <!-- SIP accounts will be rendered here -->
+                                <p class="text-muted text-sm">Нет добавленных SIP аккаунтов.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Android Device Control (ADB) -->
+                    <div class="tab-pane fade" id="adb-page" role="tabpanel" aria-labelledby="adb-tab">
+                        <h2 class="mb-4 text-gray-700">Управление Android Устройствами (ADB)</h2>
+                        <p class="text-muted mb-4">
+                            Используйте эту секцию для управления подключенными Android-устройствами/эмуляторами через ADB.
+                            <br>
+                            <strong>Требования:</strong> На сервере Node.js должен быть установлен ADB, и устройства должны быть подключены (по USB или по сети) с включенной отладкой по USB.
+                        </p>
+                        <div class="mb-3">
+                            <label for="adbDeviceSelect" class="form-label">Выберите устройство:</label>
+                            <select id="adbDeviceSelect" class="form-select">
+                                <option value="">Загрузка устройств...</option>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label for="adbPhoneNumberInput" class="form-label">Номер телефона для ADB:</label>
+                            <input type="text" id="adbPhoneNumberInput" class="form-control" placeholder="Например, +79001234567">
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                            <button id="adbDialButton" class="btn btn-success" style="background-color: var(--adb-green); border-color: var(--adb-green);">
+                                Набрать (Dial)
+                            </button>
+                            <button id="adbAnswerButton" class="btn btn-secondary">
+                                Ответить (Answer)
+                            </button>
+                            <button id="adbHangupButton" class="btn btn-danger">
+                                Повесить трубку (Hangup)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- AMI Actions -->
+                    <div class="tab-pane fade" id="ami-page" role="tabpanel" aria-labelledby="ami-tab">
+                        <h2 class="mb-4 text-gray-700">Действия AMI (через активное соединение)</h2>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h3 class="card-title text-primary mb-3">Отправить Ping</h3>
+                                        <button id="pingButton" class="btn btn-primary">
+                                            Отправить Ping
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h3 class="card-title text-success mb-3">Показать Каналы</h3>
+                                        <button id="showChannelsButton" class="btn btn-success">
+                                            CoreShowChannels
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h2 class="mt-5 mb-4 text-gray-700">Создать Вызов (Originate)</h2>
+                        <p class="text-danger mb-4">
+                            Используйте с осторожностью! Это инициирует звонок через Asterisk.
+                        </p>
+                        <div class="mb-3">
+                            <label for="originateSipAccountSelect" class="form-label">Использовать SIP аккаунт:</label>
+                            <select id="originateSipAccountSelect" class="form-select mb-2">
+                                <option value="">-- Выбрать SIP аккаунт --</option>
+                                <!-- Options populated dynamically -->
+                            </select>
+                            <small class="form-text text-muted">
+                                Если выбран SIP аккаунт, поля "Канал" и "Контекст" будут игнорироваться.
+                            </small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="originateChannel" class="form-label">Канал (например, SIP/101):</label>
+                            <input type="text" id="originateChannel" value="SIP/my_sip_extension" class="form-control">
+                        </div>
+                        <div class="mb-3">
+                            <label for="originateExten" class="form-label">Номер назначения (Exten):</label>
+                            <input type="text" id="originateExten" value="123" class="form-control">
+                        </div>
+                        <div class="mb-4">
+                            <label for="originateContext" class="form-label">Контекст (Context):</label>
+                            <input type="text" id="originateContext" value="default" class="form-control">
+                        </div>
+                        <button id="originateButton" class="btn btn-info">
+                            Отправить Originate
+                        </button>
+                    </div>
+
+                    <!-- Conference Monitoring and DTMF -->
+                    <div class="tab-pane fade" id="conf-page" role="tabpanel" aria-labelledby="conf-tab">
+                        <h2 class="mb-4 text-gray-700">Мониторинг Конференции и DTMF</h2>
+                        <p class="text-muted mb-4">
+                            Эта функция позволяет Node.js серверу присоединить внутренний канал к указанной конференции для мониторинга DTMF-сигналов.
+                            <br>
+                            <strong>Важно:</strong> Node.js не "слушает" аудио напрямую. Он получает события DTMF от Asterisk через AMI.
+                            Для того чтобы 3-й SIP-участник (например, ваш софтфон) попал в конференцию, он должен позвонить на специальный экстеншн в Asterisk, который затем направит его в эту конференцию.
+                        </p>
+                        <div class="mb-3">
+                            <label for="conferenceName" class="form-label">Имя Конференции:</label>
+                            <input type="text" id="conferenceName" value="myconference" class="form-control" placeholder="Например, 1234">
+                        </div>
+                        <button id="joinConferenceButton" class="btn btn-secondary mb-4">
+                            Присоединить Монитор к Конференции
+                        </button>
+
+                        <h3 class="mt-5 mb-3 text-gray-700">Полученные DTMF-сигналы</h3>
+                        <div id="dtmfDisplay" class="bg-light p-4 rounded text-center mb-4 border border-dashed border-secondary" style="font-size: 2.5rem; font-family: monospace; min-height: 80px; display: flex; align-items: center; justify-content: center;">
+                            Ожидание DTMF...
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                            <button id="resetDtmfButton" class="btn btn-danger">
+                                Сбросить DTMF
+                            </button>
+                            <button id="dialNumberButton" class="btn btn-warning">
+                                Набрать номер (tel:)
+                            </button>
+                        </div>
+                        <p class="text-muted mt-3 mb-0" style="font-size: 0.85rem;">
+                            Нажатие "Набрать номер" попытается открыть приложение, связанное с `tel:` ссылками на вашем устройстве, используя накопленные DTMF-цифры.
+                        </p>
+
+                        <h3 class="mt-5 mb-3 text-gray-700">Статус Звонков в Конференциях (через AMI события)</h3>
+                        <p class="text-muted mb-3">
+                            Здесь будут отображаться события начала и конца звонков в конференциях, если ваш Node.js сервер настроен для их пересылки из Asterisk AMI (например, события `Newchannel`, `Hangup`, `ConfbridgeJoin`, `ConfbridgeLeave`).
+                        </p>
+                        <div id="conferenceCallStatus" class="bg-dark text-white p-3 rounded" style="min-height: 100px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.85rem;">
+                            <!-- Call status events will appear here -->
+                            <p class="text-muted">Ожидание событий звонков...</p>
+                        </div>
+                    </div>
+
+                    <!-- Link Generation -->
+                    <div class="tab-pane fade" id="links-page" role="tabpanel" aria-labelledby="links-tab">
+                        <h2 class="mb-4 text-gray-700">Генерация и Отправка Ссылок для Активации Приложений</h2>
+                        <p class="text-muted mb-4">
+                            Используйте эту секцию для генерации ссылок, которые могут быть использованы для активации внешних приложений (например, софтфона) или перехода по URL.
+                            <br>
+                            Для 3-го SIP-участника: сгенерируйте `tel:` ссылку с номером экстеншена Asterisk, который направляет звонок в конференцию.
+                        </p>
+                        <div class="mb-3">
+                            <label for="linkSchemeSelect" class="form-label">Тип ссылки (схема):</label>
+                            <select id="linkSchemeSelect" class="form-select">
+                                <option value="tel:">Телефон (tel:)</option>
+                                <option value="mailto:">Email (mailto:)</option>
+                                <option value="sms:">SMS (sms:)</option>
+                                <option value="http://">Веб-сайт (http://)</option>
+                                <option value="https://">Веб-сайт (https://)</option>
+                                <option value="skype:">Skype (skype:)</option>
+                                <option value="sip:">SIP (sip:)</option>
+                                <option value="zoommtg:">Zoom Meeting (zoommtg:)</option>
+                                <option value="ms-teams:">MS Teams (ms-teams:)</option>
+                                <!-- Добавьте другие популярные схемы по необходимости -->
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label for="linkValueInput" class="form-label">Значение для ссылки:</label>
+                            <input type="text" id="linkValueInput" class="form-control" placeholder="Например, +79001234567, email@example.com, example.com/page, user@sip.com">
+                        </div>
+                        <div id="generatedLinkDisplay" class="bg-light p-3 rounded text-center mb-4 border border-dashed border-secondary text-break" style="font-size: 0.9rem; font-family: monospace;">
+                            Сгенерированная ссылка:
+                        </div>
+                        <button id="generateAndOpenLinkButton" class="btn btn-secondary">
+                            Сгенерировать и Открыть Ссылку
+                        </button>
+
+                        <div class="mt-5 pt-4 border-top">
+                            <h3 class="mb-4 text-gray-700">Автоматизация URL по номерам из CSV и симуляция звонков</h3>
+                            <p class="text-muted mb-3">
+                                Загрузите CSV-файл (формат: <code>номер,URL</code>) для автоматического открытия URL и симуляции событий звонков.
+                            </p>
+                            <div class="mb-3">
+                                <label for="csvFileInput" class="form-label">Загрузить CSV файл:</label>
+                                <input type="file" id="csvFileInput" class="form-control" accept=".csv">
+                            </div>
+                            <div class="mb-3">
+                                <label for="simulatedCallDuration" class="form-label">Длительность симулируемого звонка (секунды):</label>
+                                <input type="number" id="simulatedCallDuration" class="form-control" value="5" min="1">
+                            </div>
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-start mb-4">
+                                <button id="loadCsvButton" class="btn btn-primary">Загрузить CSV</button>
+                                <button id="startAutomationButton" class="btn btn-success" disabled>Начать Автоматизацию</button>
+                                <button id="stopAutomationButton" class="btn btn-danger" disabled>Остановить Автоматизацию</button>
+                            </div>
+                            <div id="automationStatus" class="alert alert-info d-none" role="alert">
+                                Статус автоматизации: Ожидание...
+                            </div>
+                            <div id="csvDataDisplay" class="bg-light p-3 rounded" style="max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.85rem;">
+                                <!-- CSV data will be displayed here -->
+                                <p class="text-muted">Загруженные данные CSV появятся здесь.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Audio and Microphone Settings (Placeholder) -->
+                    <div class="tab-pane fade" id="audio-page" role="tabpanel" aria-labelledby="audio-tab">
+                        <h2 class="mb-4 text-gray-700">Настройки Аудио и Микрофона</h2>
+                        <p class="text-muted mb-4">
+                            Для прямой работы с аудио и микрофоном (например, для совершения звонков из браузера) требуется реализация WebRTC и SIP-клиента в браузере (например, `sip.js` или `jssip`). Asterisk AMI является интерфейсом управления, а не медиа-интерфейсом. Эта секция является заглушкой для будущих расширений.
+                        </p>
+                        <div class="mb-3">
+                            <label for="audioInputSelect" class="form-label">Входное аудио устройство (Микрофон):</label>
+                            <select id="audioInputSelect" class="form-select">
+                                <option value="">Загрузка устройств...</option>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label for="audioOutputSelect" class="form-label">Выходное аудио устройство (Динамики):</label>
+                            <select id="audioOutputSelect" class="form-select">
+                                <option value="">Загрузка устройств...</option>
+                            </select>
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                            <button id="muteMicrophoneButton" class="btn btn-outline-secondary">
+                                Выключить микрофон
+                            </button>
+                            <button id="testAudioButton" class="btn btn-outline-secondary">
+                                Тест аудио
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Server Logs -->
+                    <div class="tab-pane fade" id="logs-page" role="tabpanel" aria-labelledby="logs-tab">
+                        <h2 class="mb-3 text-gray-700">Логи Сервера</h2>
+                        <div id="logs">
+                            <!-- Logs will appear here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle (Popper.js and Bootstrap JS) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" xintegrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+    <script>
+        // Глобальные переменные
+        const WS_PORT = 8181; // Порт WebSocket-сервера, как в server.js
+        let wsConnections = []; // Массив для хранения всех WebSocket-соединений
+        let activeWsId = null; // ID активного соединения для отправки команд
+        let accumulatedDtmf = ''; // Для накопления DTMF-цифр
+        let wsCounter = 0; // Для уникальных ID WebSocket-соединений
+        let authToken = localStorage.getItem('authToken'); // Получаем токен из localStorage
+        let currentUsername = localStorage.getItem('username'); // Получаем имя пользователя из localStorage
+
+        let editingSipAccountIndex = -1; // -1 means not editing, otherwise it's the index of the SIP account being edited
+
+        let csvData = []; // Stores parsed CSV data: [{ number: '...', url: '...' }]
+        let automationRunning = false;
+        let automationIndex = 0;
+        let automationInterval = null; // For simulating call events in sequence
+        let activeSimulatedCalls = new Map(); // Map<uniqueId, timeoutId> for simulated calls
+
+        // Получаем ссылки на элементы DOM
+        const authContainer = document.getElementById('auth-container');
+        const authUsernameInput = document.getElementById('auth-username');
+        const authPasswordInput = document.getElementById('auth-password');
+        const loginButton = document.getElementById('login-button');
+        const registerButton = document.getElementById('register-button');
+        const authMessageDiv = document.getElementById('auth-message');
+
+        const appContainer = document.getElementById('app-container');
+        const loggedInUsernameSpan = document.getElementById('logged-in-username');
+        const logoutButton = document.getElementById('logout-button');
+
+        const wsConnectionsContainer = document.getElementById('wsConnectionsContainer');
+        const addWsConnectionButton = document.getElementById('addWsConnectionButton');
+        const activeWsSelect = document.getElementById('activeWsSelect');
+        const globalConnectionStatusDiv = document.getElementById('globalConnectionStatus');
+        const globalAmiStatusDiv = document.getElementById('globalAmiStatus');
+        const logsDiv = document.getElementById('logs');
+
+        // SIP Account Elements
+        const sipUsernameInput = document.getElementById('sipUsernameInput');
+        const sipPasswordInput = document.getElementById('sipPasswordInput');
+        const sipServerInput = document.getElementById('sipServerInput');
+        const sipPortInput = document.getElementById('sipPortInput');
+        const sipDisplayNameInput = document.getElementById('sipDisplayNameInput');
+        const sipTransportSelect = document.getElementById('sipTransportSelect');
+        const sipOutboundProxyInput = document.getElementById('sipOutboundProxyInput');
+        const addSipAccountButton = document.getElementById('addSipAccountButton');
+        const updateSipAccountButton = document.getElementById('updateSipAccountButton');
+        const cancelEditSipAccountButton = document.getElementById('cancelEditSipAccountButton');
+        const sipAccountsList = document.getElementById('sipAccountsList');
+
+        // Originate SIP Account Selection
+        const originateSipAccountSelect = document.getElementById('originateSipAccountSelect');
+
+        // ADB Elements
+        const adbDeviceSelect = document.getElementById('adbDeviceSelect');
+        const adbPhoneNumberInput = document.getElementById('adbPhoneNumberInput');
+        const adbDialButton = document.getElementById('adbDialButton');
+        const adbAnswerButton = document.getElementById('adbAnswerButton');
+        const adbHangupButton = document.getElementById('adbHangupButton');
+
+        const pingButton = document.getElementById('pingButton');
+        const showChannelsButton = document.getElementById('showChannelsButton');
+        const originateButton = document.getElementById('originateButton');
+        const originateChannelInput = document.getElementById('originateChannel');
+        const originateExtenInput = document.getElementById('originateExten');
+        const originateContextInput = document.getElementById('originateContext');
+
+        const conferenceNameInput = document.getElementById('conferenceName');
+        const joinConferenceButton = document.getElementById('joinConferenceButton');
+        const dtmfDisplayDiv = document.getElementById('dtmfDisplay');
+        const resetDtmfButton = document.getElementById('resetDtmfButton');
+        const dialNumberButton = document.getElementById('dialNumberButton');
+        const conferenceCallStatusDiv = document.getElementById('conferenceCallStatus'); // New element
+
+        const linkSchemeSelect = document.getElementById('linkSchemeSelect');
+        const linkValueInput = document.getElementById('linkValueInput');
+        const generatedLinkDisplay = document.getElementById('generatedLinkDisplay');
+        const generateAndOpenLinkButton = document.getElementById('generateAndOpenLinkButton');
+
+        // CSV Automation Elements
+        const csvFileInput = document.getElementById('csvFileInput');
+        const loadCsvButton = document.getElementById('loadCsvButton');
+        const startAutomationButton = document.getElementById('startAutomationButton');
+        const stopAutomationButton = document.getElementById('stopAutomationButton');
+        const automationStatusDiv = document.getElementById('automationStatus');
+        const csvDataDisplayDiv = document.getElementById('csvDataDisplay');
+        const simulatedCallDurationInput = document.getElementById('simulatedCallDuration');
+
+
+        const audioInputSelect = document.getElementById('audioInputSelect');
+        const audioOutputSelect = document.getElementById('audioOutputSelect');
+        const muteMicrophoneButton = document.getElementById('muteMicrophoneButton');
+        const testAudioButton = document.getElementById('testAudioButton');
+
+        // Tab elements (Bootstrap's JS handles tab switching, so we just need their IDs)
+        const wsTab = new bootstrap.Tab(document.getElementById('ws-tab'));
+        const adbTab = new bootstrap.Tab(document.getElementById('adb-tab'));
+        const amiTab = new bootstrap.Tab(document.getElementById('ami-tab'));
+        const confTab = new bootstrap.Tab(document.getElementById('conf-tab'));
+        const linksTab = new bootstrap.Tab(document.getElementById('links-tab'));
+        const audioTab = new bootstrap.Tab(document.getElementById('audio-tab'));
+        const logsTab = new bootstrap.Tab(document.getElementById('logs-tab'));
+
+        // --- Вспомогательные функции для UI и логов ---
+
+        function appendLog(message, type = 'info', wsId = null) {
+            const p = document.createElement('p');
+            p.classList.add('log-entry');
+            if (type) {
+                p.classList.add(`log-${type}`);
+            }
+            let prefix = `[${new Date().toLocaleTimeString()}]`;
+            if (wsId !== null) {
+                prefix += ` [WS:${wsId}]`;
+            }
+            p.textContent = `${prefix} ${message}`;
+            logsDiv.appendChild(p);
+            logsDiv.scrollTop = logsDiv.scrollHeight; // Прокрутка вниз
+        }
+
+        function appendConferenceCallStatus(message, type = 'info') {
+            const p = document.createElement('p');
+            p.classList.add('log-entry');
+            if (type) {
+                // Use Bootstrap text colors for clarity
+                if (type === 'start') p.classList.add('text-success');
+                else if (type === 'end') p.classList.add('text-danger');
+                else p.classList.add('text-info');
+            }
+            p.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            conferenceCallStatusDiv.appendChild(p);
+            conferenceCallStatusDiv.scrollTop = conferenceCallStatusDiv.scrollHeight;
+        }
+
+        function updateGlobalConnectionStatus() {
+            const connectedCount = wsConnections.filter(conn => conn.wsInstance && conn.wsInstance.readyState === WebSocket.OPEN).length;
+            globalConnectionStatusDiv.classList.remove('alert-success', 'alert-danger', 'alert-secondary');
+            if (connectedCount > 0) {
+                globalConnectionStatusDiv.textContent = `Подключено к Node.js (${connectedCount} соединений)`;
+                globalConnectionStatusDiv.classList.add('alert-success');
+            } else {
+                globalConnectionStatusDiv.textContent = 'Общий статус: Отключено';
+                globalConnectionStatusDiv.classList.add('alert-danger');
+            }
+        }
+
+        function updateGlobalAmiStatus(status) {
+            globalAmiStatusDiv.classList.remove('alert-success', 'alert-warning', 'alert-danger', 'alert-secondary');
+            globalAmiStatusDiv.textContent = `Статус AMI (активное): ${status}`;
+            if (status === 'connected') {
+                globalAmiStatusDiv.classList.add('alert-success');
+            } else if (status === 'disconnected') {
+                globalAmiStatusDiv.classList.add('alert-danger');
+            } else if (status === 'reconnecting') {
+                globalAmiStatusDiv.classList.add('alert-warning');
+            } else {
+                globalAmiStatusDiv.classList.add('alert-secondary');
+            }
+        }
+
+        // --- Управление WebSocket соединениями ---
+
+        function createWsConnectionElement(id, name, url, status, defaultConference) {
+            const div = document.createElement('div');
+            div.id = `ws-conn-${id}`;
+            div.classList.add('d-flex', 'flex-column', 'flex-md-row', 'align-items-md-center', 'mb-3', 'p-3', 'bg-light', 'rounded', 'shadow-sm', 'border');
+
+            div.innerHTML = `
+                <input type="text" id="ws-name-${id}" value="${name}" class="form-control me-md-2 mb-2 mb-md-0 flex-grow-1" placeholder="Имя соединения">
+                <input type="text" id="ws-url-${id}" value="${url}" class="form-control me-md-2 mb-2 mb-md-0 flex-grow-1" placeholder="ws://localhost:8181">
+                <input type="text" id="ws-conf-${id}" value="${defaultConference || ''}" class="form-control me-md-2 mb-2 mb-md-0 flex-grow-1" placeholder="Конференция по умолчанию">
+                <span id="ws-status-${id}" class="badge bg-secondary me-md-2 mb-2 mb-md-0" style="min-width: 100px;">Статус: ${status}</span>
+                <div class="d-flex gap-2">
+                    <button id="ws-connect-btn-${id}" class="btn btn-sm btn-success flex-grow-1">Подкл.</button>
+                    <button id="ws-disconnect-btn-${id}" class="btn btn-sm btn-danger flex-grow-1">Откл.</button>
+                    <button id="ws-remove-btn-${id}" class="btn btn-sm btn-outline-danger flex-grow-1">X</button>
+                </div>
+            `;
+            wsConnectionsContainer.appendChild(div);
+
+            // Добавляем обработчики событий
+            document.getElementById(`ws-connect-btn-${id}`).addEventListener('click', () => connectWebSocket(id));
+            document.getElementById(`ws-disconnect-btn-${id}`).addEventListener('click', () => disconnectWebSocket(id));
+            document.getElementById(`ws-remove-btn-${id}`).addEventListener('click', () => removeWsConnection(id));
+            document.getElementById(`ws-name-${id}`).addEventListener('change', (e) => {
+                const conn = wsConnections.find(c => c.id === id);
+                if (conn) {
+                    conn.name = e.target.value;
+                    saveConnectionsToLocalStorage(); // Save changes
+                }
+                updateActiveWsSelect(); // Обновить dropdown, если имя изменилось
+            });
+            document.getElementById(`ws-url-${id}`).addEventListener('change', (e) => {
+                const conn = wsConnections.find(c => c.id === id);
+                if (conn) {
+                    conn.url = e.target.value;
+                    saveConnectionsToLocalStorage(); // Save changes
+                }
+            });
+            document.getElementById(`ws-conf-${id}`).addEventListener('change', (e) => {
+                const conn = wsConnections.find(c => c.id === id);
+                if (conn) {
+                    conn.defaultConference = e.target.value.trim();
+                    saveConnectionsToLocalStorage(); // Save changes
+                }
+            });
+
+            updateWsStatusDisplay(id, status); // Инициализируем отображение статуса
+        }
+
+        function updateWsStatusDisplay(id, status) {
+            const statusSpan = document.getElementById(`ws-status-${id}`);
+            if (statusSpan) {
+                statusSpan.textContent = `Статус: ${status}`;
+                statusSpan.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'bg-secondary');
+                if (status === 'Connected') {
+                    statusSpan.classList.add('bg-success');
+                } else if (status === 'Disconnected') {
+                    statusSpan.classList.add('bg-danger');
+                } else if (status === 'Connecting...') {
+                    statusSpan.classList.add('bg-warning');
+                } else {
+                    statusSpan.classList.add('bg-secondary');
+                }
+            }
+        }
+
+        function addWsConnection(name = `Соединение ${wsCounter + 1}`, url = `ws://localhost:${WS_PORT}`, sipAccounts = [], defaultConference = '') {
+            const id = wsCounter++;
+            const newConn = { id, name, url, wsInstance: null, status: 'Disconnected', amiStatus: 'Unknown', sipAccounts: sipAccounts, defaultConference: defaultConference };
+            wsConnections.push(newConn);
+            createWsConnectionElement(id, name, url, newConn.status, newConn.defaultConference);
+            updateActiveWsSelect();
+            updateGlobalConnectionStatus();
+            saveConnectionsToLocalStorage(); // Save new connection
+        }
+
+        function removeWsConnection(id) {
+            const connIndex = wsConnections.findIndex(conn => conn.id === id);
+            if (connIndex > -1) {
+                const conn = wsConnections[connIndex];
+                if (conn.wsInstance) {
+                    conn.wsInstance.close();
+                }
+                wsConnections.splice(connIndex, 1);
+                document.getElementById(`ws-conn-${id}`).remove();
+                updateActiveWsSelect();
+                updateGlobalConnectionStatus();
+                if (activeWsId === id) {
+                    activeWsId = null;
+                    updateGlobalAmiStatus('Неизвестно');
+                    renderSipAccounts(); // Clear SIP accounts display
+                    populateOriginateSipAccounts(); // Clear originate SIP select
+                }
+                appendLog(`Соединение ${conn.name} (ID: ${id}) удалено.`, 'info');
+                saveConnectionsToLocalStorage(); // Save after removal
+            }
+        }
+
+        function updateActiveWsSelect() {
+            activeWsSelect.innerHTML = '<option value="">Выберите активное соединение</option>';
+            wsConnections.forEach(conn => {
+                const option = document.createElement('option');
+                option.value = conn.id;
+                option.textContent = `${conn.name} (${conn.url})`;
+                activeWsSelect.appendChild(option);
+            });
+            if (activeWsId !== null) {
+                activeWsSelect.value = activeWsId;
+            }
+            // Render SIP accounts for the newly selected active connection
+            renderSipAccounts();
+            populateOriginateSipAccounts(); // Populate originate SIP select
+            updateConferenceNameInput(); // Update conference name input based on active connection
+        }
+
+        async function connectWebSocket(id) {
+            const conn = wsConnections.find(c => c.id === id);
+            if (!conn) {
+                appendLog(`Соединение с ID ${id} не найдено.`, 'error');
+                return;
+            }
+
+            if (conn.wsInstance && (conn.wsInstance.readyState === WebSocket.OPEN || conn.wsInstance.readyState === WebSocket.CONNECTING)) {
+                appendLog(`Соединение ${conn.name} уже подключено или подключается.`, 'info', id);
+                return;
+            }
+
+            const wsUrl = document.getElementById(`ws-url-${id}`).value.trim();
+            if (!wsUrl) {
+                appendLog(`Пожалуйста, введите адрес WebSocket сервера для ${conn.name}.`, 'error', id);
+                return;
+            }
+
+            appendLog(`Попытка подключения к WebSocket: ${wsUrl} (${conn.name})...`, 'info', id);
+            updateWsStatusDisplay(id, 'Connecting...');
+            conn.status = 'Connecting...';
+            updateGlobalConnectionStatus();
+
+            conn.wsInstance = new WebSocket(wsUrl);
+
+            conn.wsInstance.onopen = () => {
+                appendLog(`WebSocket ${conn.name} подключен.`, 'info', id);
+                updateWsStatusDisplay(id, 'Connected');
+                conn.status = 'Connected';
+                updateGlobalConnectionStatus();
+                // Send auth token immediately after connection
+                if (authToken) {
+                    conn.wsInstance.send(JSON.stringify({ type: 'auth', token: authToken }));
+                    appendLog(`Отправлен токен авторизации для ${conn.name}.`, 'info', id);
+                } else {
+                    appendLog(`Нет токена авторизации для ${conn.name}.`, 'error', id);
+                }
+
+                // Если это первое подключение или активное соединение, обновить статус AMI
+                if (activeWsId === id || activeWsId === null) {
+                    updateGlobalAmiStatus('Подключено');
+                    activeWsId = id; // Сделать это активным, если еще нет активного
+                    updateActiveWsSelect();
+                }
+            };
+
+            conn.wsInstance.onmessage = event => {
+                const message = JSON.parse(event.data);
+                switch (message.type) {
+                    case 'server_status':
+                        appendLog(`Сервер (${conn.name}): ${message.message}`, 'info', id);
+                        break;
+                    case 'ami_status':
+                        conn.amiStatus = message.status;
+                        if (activeWsId === id) { // Обновляем глобальный статус AMI только для активного соединения
+                            updateGlobalAmiStatus(message.status);
+                        }
+                        appendLog(`AMI статус (${conn.name}): ${message.status}`, 'info', id);
+                        break;
+                    case 'ami_event':
+                        appendLog(`AMI Событие (${conn.name}): ${JSON.stringify(message.data)}`, 'ami_event', id);
+                        // Handle call status events for conference monitoring
+                        if (message.data.Event === 'Newchannel' || message.data.Event === 'Hangup' ||
+                            message.data.Event === 'ConfbridgeJoin' || message.data.Event === 'ConfbridgeLeave') {
+                            handleConferenceCallEvent(message.data, id);
+                        }
+                        break;
+                    case 'ami_response':
+                        appendLog(`AMI Ответ (${conn.name}): ${JSON.stringify(message.data)}`, 'ami_response', id);
+                        break;
+                    case 'ami_action_response':
+                        appendLog(`Ответ на действие "${message.action}" (${conn.name}): ${JSON.stringify(message.data)}`, 'ami_response', id);
+                        break;
+                    case 'conf_originate_response':
+                        appendLog(`Ответ на присоединение к конференции (${conn.name}): ${JSON.stringify(message.data)}`, 'ami_response', id);
+                        break;
+                    case 'dtmf_digit':
+                        // DTMF всегда относится к активной конференции, независимо от WS
+                        accumulatedDtmf += message.digit;
+                        dtmfDisplayDiv.textContent = accumulatedDtmf || 'Ожидание DTMF...';
+                        appendLog(`DTMF "${message.digit}" получено в конференции "${message.conference}" (через ${conn.name})`, 'dtmf', id);
+                        break;
+                    case 'confbridge_event':
+                        appendLog(`Событие Конференции (${conn.name}): ${JSON.stringify(message.data)}`, 'ami_event', id);
+                        break;
+                    case 'ami_error':
+                        appendLog(`Ошибка AMI (${conn.name}): ${message.message}`, 'error', id);
+                        break;
+                    case 'error':
+                        appendLog(`Ошибка: ${message.message}`, 'error', id);
+                        break;
+                    case 'adb_device_update':
+                        populateAdbDevices(message.devices);
+                        appendLog(`Обновлен список ADB устройств: ${message.devices.length} найдено.`, 'adb', id);
+                        break;
+                    case 'adb_action_response':
+                        if (message.success) {
+                            appendLog(`ADB: Устройство ${message.deviceId}, действие "${message.actionType}" успешно. Вывод: "${message.output}"`, 'adb', id);
+                        } else {
+                            appendLog(`ADB: Устройство ${message.deviceId}, действие "${message.actionType}" ошибка: ${message.error}`, 'error', id);
+                        }
+                        break;
+                    case 'auth_status':
+                        if (message.success) {
+                            appendLog(`Авторизация WebSocket для ${conn.name} успешна.`, 'info', id);
+                        } else {
+                            appendLog(`Авторизация WebSocket для ${conn.name} не удалась: ${message.message}`, 'error', id);
+                            // Optionally disconnect if auth fails
+                            // conn.wsInstance.close();
+                        }
+                        break;
+                    default:
+                        appendLog(`Неизвестное сообщение (${conn.name}): ${JSON.stringify(message)}`, 'info', id);
+                }
+            };
+
+            conn.wsInstance.onclose = () => {
+                appendLog(`WebSocket ${conn.name} отключен. Попытка переподключения через 3 секунды...`, 'error', id);
+                updateWsStatusDisplay(id, 'Disconnected');
+                conn.status = 'Disconnected';
+                conn.amiStatus = 'Unknown';
+                updateGlobalConnectionStatus();
+                if (activeWsId === id) {
+                    updateGlobalAmiStatus('Отключено');
+                }
+                setTimeout(() => connectWebSocket(id), 3000); // Попытка переподключения
+            };
+
+            conn.wsInstance.onerror = error => {
+                appendLog(`WebSocket ошибка ${conn.name}: ${error.message}`, 'error', id);
+                console.error(`WebSocket Error (${conn.name}):`, error);
+                conn.wsInstance.close(); // Закрываем соединение, чтобы сработал onclose и попытка переподключения
+            };
+        }
+
+        function disconnectWebSocket(id) {
+            const conn = wsConnections.find(c => c.id === id);
+            if (conn && conn.wsInstance && conn.wsInstance.readyState === WebSocket.OPEN) {
+                conn.wsInstance.close();
+                appendLog(`WebSocket ${conn.name} отключен вручную.`, 'info', id);
+            } else {
+                appendLog(`WebSocket ${conn.name} не активен или уже отключен.`, 'info', id);
+            }
+        }
+
+        function getActiveWs() {
+            if (activeWsId === null) {
+                appendLog('Нет активного WebSocket соединения для отправки команд.', 'error');
+                return null;
+            }
+            const activeConn = wsConnections.find(conn => conn.id === activeWsId);
+            if (!activeConn || !activeConn.wsInstance || activeConn.wsInstance.readyState !== WebSocket.OPEN) {
+                appendLog(`Активное соединение (ID: ${activeWsId}) не активно. Пожалуйста, подключитесь.`, 'error');
+                return null;
+            }
+            return activeConn.wsInstance;
+        }
+
+        // --- Persistence (localStorage) ---
+        function saveConnectionsToLocalStorage() {
+            localStorage.setItem('wsConnections', JSON.stringify(wsConnections.map(conn => ({
+                id: conn.id,
+                name: conn.name,
+                url: conn.url,
+                sipAccounts: conn.sipAccounts, // Save SIP accounts
+                defaultConference: conn.defaultConference // Save default conference
+            }))));
+        }
+
+        function loadConnectionsFromLocalStorage() {
+            const storedConnections = localStorage.getItem('wsConnections');
+            if (storedConnections) {
+                const parsedConnections = JSON.parse(storedConnections);
+                wsConnections = parsedConnections.map(connData => ({
+                    ...connData,
+                    wsInstance: null, // WebSocket instance will be re-created on connect
+                    status: 'Disconnected',
+                    amiStatus: 'Unknown',
+                    // Ensure defaultConference exists, even if not in old stored data
+                    defaultConference: connData.defaultConference || '' 
+                }));
+                // Restore wsCounter to ensure unique IDs for new connections
+                wsCounter = wsConnections.length > 0 ? Math.max(...wsConnections.map(c => c.id)) + 1 : 0;
+            } else {
+                // Add default connections if no stored data
+                addWsConnection('Сервер 1 (Local)', `ws://localhost:${WS_PORT}`, [], 'myconference'); // Default conference for demo
+                addWsConnection('Сервер 2 (LAN)', `ws://192.168.1.100:${WS_PORT}`, [], 'myconference');
+                addWsConnection('Сервер 3 (Remote)', `ws://your-remote-server-ip:${WS_PORT}`, [], 'myconference');
+            }
+        }
+
+        // --- SIP Account Management ---
+
+        function getActiveConnection() {
+            return wsConnections.find(conn => conn.id === activeWsId);
+        }
+
+        function renderSipAccounts() {
+            const activeConn = getActiveConnection();
+            sipAccountsList.innerHTML = ''; // Clear current list
+
+            if (!activeConn || !activeConn.sipAccounts || activeConn.sipAccounts.length === 0) {
+                sipAccountsList.innerHTML = '<p class="text-muted text-sm">Нет добавленных SIP аккаунтов.</p>';
+                return;
+            }
+
+            activeConn.sipAccounts.forEach((account, index) => {
+                const div = document.createElement('div');
+                div.classList.add('list-group-item', 'd-flex', 'flex-column', 'flex-md-row', 'justify-content-between', 'align-items-start', 'align-items-md-center', 'mb-2');
+                div.innerHTML = `
+                    <div class="flex-grow-1 mb-2 mb-md-0">
+                        <h6 class="mb-1">${account.displayName || account.username} <small class="text-muted">@ ${account.server}:${account.port} (${account.transport})</small></h6>
+                        <small class="text-muted">Пароль: ${'*'.repeat(account.password.length)}</small>
+                        ${account.outboundProxy ? `<br><small class="text-muted">Прокси: ${account.outboundProxy}</small>` : ''}
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button data-index="${index}" class="edit-sip-btn btn btn-sm btn-outline-primary">Редактировать</button>
+                        <button data-index="${index}" class="delete-sip-btn btn btn-sm btn-outline-danger">Удалить</button>
+                    </div>
+                `;
+                sipAccountsList.appendChild(div);
+            });
+
+            // Add event listeners for edit/delete buttons
+            sipAccountsList.querySelectorAll('.edit-sip-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    editSipAccount(index);
+                });
+            });
+            sipAccountsList.querySelectorAll('.delete-sip-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    deleteSipAccount(index);
+                });
+            });
+        }
+
+        function addSipAccount() {
+            const activeConn = getActiveConnection();
+            if (!activeConn) {
+                appendLog('Пожалуйста, выберите активное WebSocket соединение.', 'error');
+                return;
+            }
+
+            const username = sipUsernameInput.value.trim();
+            const password = sipPasswordInput.value.trim();
+            const server = sipServerInput.value.trim();
+            const port = sipPortInput.value.trim();
+            const displayName = sipDisplayNameInput.value.trim();
+            const transport = sipTransportSelect.value;
+            const outboundProxy = sipOutboundProxyInput.value.trim();
+
+            if (!username || !password || !server || !port || !transport) {
+                appendLog('Пожалуйста, заполните все обязательные поля SIP аккаунта (Имя, Пароль, Сервер, Порт, Транспорт).', 'error');
+                return;
+            }
+
+            if (activeConn.sipAccounts.length >= 3) {
+                appendLog('Максимальное количество SIP аккаунтов (3) для этого соединения достигнуто.', 'error');
+                return;
+            }
+
+            activeConn.sipAccounts.push({ username, password, server, port, displayName, transport, outboundProxy });
+            clearSipAccountForm();
+            renderSipAccounts();
+            populateOriginateSipAccounts(); // Update originate SIP select
+            saveConnectionsToLocalStorage();
+            appendLog(`SIP аккаунт "${username}" добавлен к соединению "${activeConn.name}".`, 'info');
+        }
+
+        function editSipAccount(index) {
+            const activeConn = getActiveConnection();
+            if (!activeConn || !activeConn.sipAccounts || index < 0 || index >= activeConn.sipAccounts.length) {
+                appendLog('Неверный индекс SIP аккаунта для редактирования.', 'error');
+                return;
+            }
+
+            const accountToEdit = activeConn.sipAccounts[index];
+            sipUsernameInput.value = accountToEdit.username;
+            sipPasswordInput.value = accountToEdit.password; // Note: In a real app, passwords shouldn't be re-displayed for security
+            sipServerInput.value = accountToEdit.server;
+            sipPortInput.value = accountToEdit.port;
+            sipDisplayNameInput.value = accountToEdit.displayName;
+            sipTransportSelect.value = accountToEdit.transport;
+            sipOutboundProxyInput.value = accountToEdit.outboundProxy;
+
+
+            editingSipAccountIndex = index;
+            addSipAccountButton.classList.add('d-none');
+            updateSipAccountButton.classList.remove('d-none');
+            cancelEditSipAccountButton.classList.remove('d-none');
+            appendLog(`Редактирование SIP аккаунта: ${accountToEdit.username}.`, 'info');
+        }
+
+        function updateSipAccount() {
+            const activeConn = getActiveConnection();
+            if (!activeConn || editingSipAccountIndex === -1) {
+                appendLog('Нет активного SIP аккаунта для обновления.', 'error');
+                return;
+            }
+
+            const username = sipUsernameInput.value.trim();
+            const password = sipPasswordInput.value.trim();
+            const server = sipServerInput.value.trim();
+            const port = sipPortInput.value.trim();
+            const displayName = sipDisplayNameInput.value.trim();
+            const transport = sipTransportSelect.value;
+            const outboundProxy = sipOutboundProxyInput.value.trim();
+
+            if (!username || !password || !server || !port || !transport) {
+                appendLog('Пожалуйста, заполните все обязательные поля SIP аккаунта.', 'error');
+                return;
+            }
+
+            activeConn.sipAccounts[editingSipAccountIndex] = { username, password, server, port, displayName, transport, outboundProxy };
+            clearSipAccountForm();
+            renderSipAccounts();
+            populateOriginateSipAccounts(); // Update originate SIP select
+            saveConnectionsToLocalStorage();
+            appendLog(`SIP аккаунт обновлен для соединения "${activeConn.name}".`, 'info');
+            resetSipEditMode();
+        }
+
+        function deleteSipAccount(index) {
+            const activeConn = getActiveConnection();
+            if (!activeConn || !activeConn.sipAccounts || index < 0 || index >= activeConn.sipAccounts.length) {
+                appendLog('Неверный индекс SIP аккаунта для удаления.', 'error');
+                return;
+            }
+
+            const deletedAccount = activeConn.sipAccounts.splice(index, 1);
+            renderSipAccounts();
+            populateOriginateSipAccounts(); // Update originate SIP select
+            saveConnectionsToLocalStorage();
+            appendLog(`SIP аккаунт "${deletedAccount[0].username}" удален из соединения "${activeConn.name}".`, 'info');
+            resetSipEditMode();
+        }
+
+        function clearSipAccountForm() {
+            sipUsernameInput.value = '';
+            sipPasswordInput.value = '';
+            sipServerInput.value = '';
+            sipPortInput.value = '5060'; // Reset to default
+            sipDisplayNameInput.value = '';
+            sipTransportSelect.value = 'UDP'; // Reset to default
+            sipOutboundProxyInput.value = '';
+        }
+
+        function resetSipEditMode() {
+            editingSipAccountIndex = -1;
+            addSipAccountButton.classList.remove('d-none');
+            updateSipAccountButton.classList.add('d-none');
+            cancelEditSipAccountButton.classList.add('d-none');
+            clearSipAccountForm();
+        }
+
+        // --- Originate SIP Account Population ---
+        function populateOriginateSipAccounts() {
+            const activeConn = getActiveConnection();
+            originateSipAccountSelect.innerHTML = '<option value="">-- Выбрать SIP аккаунт --</option>';
+
+            if (activeConn && activeConn.sipAccounts && activeConn.sipAccounts.length > 0) {
+                activeConn.sipAccounts.forEach((account, index) => {
+                    const option = document.createElement('option');
+                    option.value = index; // Store index to retrieve full account details
+                    option.textContent = `${account.displayName || account.username} (${account.server}:${account.port})`;
+                    originateSipAccountSelect.appendChild(option);
+                });
+            }
+        }
+
+        // --- Conference Monitoring Enhancements ---
+        function updateConferenceNameInput() {
+            const activeConn = getActiveConnection();
+            if (activeConn && activeConn.defaultConference) {
+                conferenceNameInput.value = activeConn.defaultConference;
+            } else {
+                conferenceNameInput.value = 'myconference'; // Default if no specific conference is set
+            }
+        }
+
+        function handleConferenceCallEvent(eventData, wsId) {
+            let message = '';
+            let type = 'info';
+            const conference = eventData.Conference || 'Unknown Conference';
+            const channel = eventData.Channel || 'Unknown Channel';
+            const uniqueid = eventData.Uniqueid || `simulated-${Date.now()}`; // Generate unique ID for simulated calls
+            const connectedlinenum = eventData.ConnectedLineNum || eventData.CallerIDNum || 'N/A';
+            const connectedlinename = eventData.ConnectedLineName || 'N/A';
+
+            switch (eventData.Event) {
+                case 'Newchannel':
+                    message = `Новый канал создан: ${channel} (ID: ${uniqueid}) для ${connectedlinename} (${connectedlinenum})`;
+                    type = 'start';
+                    break;
+                case 'Hangup':
+                    message = `Канал завершен: ${channel} (ID: ${uniqueid})`;
+                    type = 'end';
+                    break;
+                case 'ConfbridgeJoin':
+                    message = `Участник ${channel} присоединился к конференции "${conference}"`;
+                    type = 'start';
+                    break;
+                case 'ConfbridgeLeave':
+                    message = `Участник ${channel} покинул конференцию "${conference}"`;
+                    type = 'end';
+                    break;
+                case 'SimulatedCallStart': // Custom event for client-side simulation
+                    message = `Симулирован старт звонка для номера ${connectedlinenum} (ID: ${uniqueid})`;
+                    type = 'start';
+                    break;
+                case 'SimulatedCallEnd': // Custom event for client-side simulation
+                    message = `Симулирован отбой звонка для номера ${connectedlinenum} (ID: ${uniqueid})`;
+                    type = 'end';
+                    break;
+                default:
+                    message = `Неизвестное событие конференции: ${JSON.stringify(eventData)}`;
+                    type = 'info';
+            }
+            appendConferenceCallStatus(message, type);
+            appendLog(`Событие конференции (WS:${wsId}): ${message}`, type, wsId);
+        }
+
+
+        // --- CSV Automation Functions ---
+        loadCsvButton.addEventListener('click', () => {
+            const file = csvFileInput.files[0];
+            if (!file) {
+                appendLog('Пожалуйста, выберите CSV файл для загрузки.', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                parseCsvData(text);
+            };
+            reader.readAsText(file);
+        });
+
+        function parseCsvData(csvText) {
+            csvData = [];
+            const lines = csvText.split('\n').filter(line => line.trim() !== ''); // Filter empty lines
+            csvDataDisplayDiv.innerHTML = '';
+            automationStatusDiv.classList.add('d-none');
+
+            if (lines.length === 0) {
+                appendLog('CSV файл пуст или имеет неверный формат.', 'error');
+                csvDataDisplayDiv.innerHTML = '<p class="text-muted">CSV файл пуст или имеет неверный формат.</p>';
+                startAutomationButton.disabled = true;
+                return;
+            }
+
+            let headerSkipped = false;
+            lines.forEach((line, index) => {
+                // Simple CSV parsing: split by comma, assume first line is header
+                const parts = line.split(',').map(part => part.trim());
+                if (parts.length === 2) {
+                    if (!headerSkipped && (parts[0].toLowerCase() === 'number' || parts[0].toLowerCase() === 'номер')) {
+                        // Assume first line is header and skip it
+                        headerSkipped = true;
+                        return;
+                    }
+                    csvData.push({ number: parts[0], url: parts[1] });
+                    const p = document.createElement('p');
+                    p.textContent = `Номер: ${parts[0]}, URL: ${parts[1]}`;
+                    csvDataDisplayDiv.appendChild(p);
+                } else {
+                    appendLog(`Строка CSV ${index + 1} имеет неверный формат: "${line}" (ожидается "номер,URL")`, 'warning');
+                }
+            });
+
+            if (csvData.length > 0) {
+                appendLog(`Загружено ${csvData.length} записей из CSV.`, 'info');
+                startAutomationButton.disabled = false;
+                csvDataDisplayDiv.classList.remove('bg-light');
+                csvDataDisplayDiv.classList.add('bg-success', 'text-white');
+            } else {
+                appendLog('Не удалось загрузить данные из CSV. Проверьте формат.', 'error');
+                csvDataDisplayDiv.innerHTML = '<p class="text-muted">Не удалось загрузить данные из CSV. Проверьте формат.</p>';
+                startAutomationButton.disabled = true;
+            }
+        }
+
+        startAutomationButton.addEventListener('click', () => {
+            if (csvData.length === 0) {
+                appendLog('Нет данных для автоматизации. Пожалуйста, загрузите CSV файл.', 'error');
+                return;
+            }
+            if (automationRunning) {
+                appendLog('Автоматизация уже запущена.', 'info');
+                return;
+            }
+
+            automationRunning = true;
+            automationIndex = 0;
+            startAutomationButton.disabled = true;
+            stopAutomationButton.disabled = false;
+            automationStatusDiv.classList.remove('d-none', 'alert-success', 'alert-danger');
+            automationStatusDiv.classList.add('alert-info');
+            automationStatusDiv.textContent = 'Автоматизация: Запущена. Обработка номеров...';
+            appendLog('Автоматизация URL запущена.', 'info');
+
+            // Start processing CSV entries sequentially
+            processNextAutomationEntry();
+        });
+
+        stopAutomationButton.addEventListener('click', () => {
+            stopAutomation();
+            appendLog('Автоматизация URL остановлена вручную.', 'info');
+        });
+
+        function stopAutomation() {
+            automationRunning = false;
+            if (automationInterval) {
+                clearInterval(automationInterval);
+                automationInterval = null;
+            }
+            // Clear any pending simulated call timeouts
+            activeSimulatedCalls.forEach(timeoutId => clearTimeout(timeoutId));
+            activeSimulatedCalls.clear();
+
+            startAutomationButton.disabled = false;
+            stopAutomationButton.disabled = true;
+            automationStatusDiv.textContent = 'Автоматизация: Остановлена.';
+            automationStatusDiv.classList.remove('alert-success', 'alert-info');
+            automationStatusDiv.classList.add('alert-danger');
+        }
+
+        function processNextAutomationEntry() {
+            if (!automationRunning || automationIndex >= csvData.length) {
+                appendLog('Автоматизация завершена: все номера обработаны.', 'info');
+                automationStatusDiv.textContent = 'Автоматизация: Завершена. Все номера обработаны.';
+                automationStatusDiv.classList.remove('alert-info', 'alert-danger');
+                automationStatusDiv.classList.add('alert-success');
+                stopAutomation();
+                return;
+            }
+
+            const currentEntry = csvData[automationIndex];
+            const uniqueId = `sim-${Date.now()}-${automationIndex}`; // Unique ID for simulation
+
+            appendLog(`Автоматизация: Обработка номера ${currentEntry.number}. Открытие URL: ${currentEntry.url}`, 'info');
+            automationStatusDiv.textContent = `Автоматизация: Обработка ${currentEntry.number}...`;
+
+            // 1. Open URL
+            window.open(currentEntry.url, '_blank');
+
+            // 2. Simulate Call Start
+            simulateCallStart(currentEntry.number, uniqueId);
+
+            // 3. Schedule Call End
+            const callDurationSeconds = parseInt(simulatedCallDurationInput.value) || 5;
+            const timeoutId = setTimeout(() => {
+                simulateCallEnd(currentEntry.number, uniqueId);
+                activeSimulatedCalls.delete(uniqueId);
+                automationIndex++; // Move to next entry only after call ends
+                processNextAutomationEntry(); // Process next entry
+            }, callDurationSeconds * 1000);
+            activeSimulatedCalls.set(uniqueId, timeoutId);
+        }
+
+        function simulateCallStart(number, uniqueId) {
+            const activeConn = getActiveConnection();
+            const conference = activeConn ? activeConn.defaultConference : 'simulated_conf';
+
+            handleConferenceCallEvent({
+                Event: 'SimulatedCallStart', // Custom event type
+                Channel: `Simulated/${number}`,
+                Uniqueid: uniqueId,
+                CallerIDNum: number,
+                ConnectedLineNum: number,
+                ConnectedLineName: `Simulated User ${number}`,
+                Conference: conference
+            }, activeWsId);
+        }
+
+        function simulateCallEnd(number, uniqueId) {
+            const activeConn = getActiveConnection();
+            const conference = activeConn ? activeConn.defaultConference : 'simulated_conf';
+
+            handleConferenceCallEvent({
+                Event: 'SimulatedCallEnd', // Custom event type
+                Channel: `Simulated/${number}`,
+                Uniqueid: uniqueId,
+                CallerIDNum: number,
+                ConnectedLineNum: number,
+                ConnectedLineName: `Simulated User ${number}`,
+                Conference: conference
+            }, activeWsId);
+        }
+
+
+        // --- Обработчики кнопок ---
+
+        addWsConnectionButton.addEventListener('click', () => addWsConnection());
+
+        activeWsSelect.addEventListener('change', (e) => {
+            activeWsId = parseInt(e.target.value);
+            const activeConn = wsConnections.find(conn => conn.id === activeWsId);
+            if (activeConn) {
+                updateGlobalAmiStatus(activeConn.amiStatus);
+                appendLog(`Активное соединение переключено на: ${activeConn.name}.`, 'info');
+            }
+            renderSipAccounts(); // Re-render SIP accounts for the new active connection
+            populateOriginateSipAccounts(); // Populate originate SIP select for the new active connection
+            resetSipEditMode(); // Reset SIP form when changing active connection
+            updateConferenceNameInput(); // Update conference name input
+        });
+
+        addSipAccountButton.addEventListener('click', addSipAccount);
+        updateSipAccountButton.addEventListener('click', updateSipAccount);
+        cancelEditSipAccountButton.addEventListener('click', resetSipEditMode);
+
+
+        pingButton.addEventListener('click', () => {
+            const ws = getActiveWs();
+            if (ws) {
+                ws.send(JSON.stringify({ type: 'ami_action', action: { Action: 'Ping' } }));
+                appendLog('Отправка Ping...', 'info', activeWsId);
+            }
+        });
+
+        showChannelsButton.addEventListener('click', () => {
+            const ws = getActiveWs();
+            if (ws) {
+                ws.send(JSON.stringify({ type: 'ami_action', action: { Action: 'CoreShowChannels' } }));
+                appendLog('Отправка CoreShowChannels...', 'info', activeWsId);
+            }
+        });
+
+        originateButton.addEventListener('click', () => {
+            const ws = getActiveWs();
+            if (ws) {
+                const selectedSipAccountIndex = originateSipAccountSelect.value;
+                let originateAction = {};
+
+                if (selectedSipAccountIndex !== "") {
+                    const activeConn = getActiveConnection();
+                    const sipAccount = activeConn.sipAccounts[parseInt(selectedSipAccountIndex)];
+                    
+                    if (!sipAccount) {
+                        appendLog('Выбранный SIP аккаунт не найден.', 'error');
+                        return;
+                    }
+
+                    originateAction = {
+                        Action: 'Originate',
+                        Channel: `SIP/${sipAccount.username}`, // Example: SIP/myuser
+                        Exten: originateExtenInput.value, // Destination number
+                        Context: originateContextInput.value, // Destination context
+                        Priority: 1,
+                        Callerid: `${sipAccount.displayName || sipAccount.username} <${sipAccount.username}>`
+                    };
+                    appendLog(`Отправка Originate через SIP аккаунт "${sipAccount.username}" на ${originateAction.Exten}@${originateAction.Context}...`, 'info', activeWsId);
+
+                } else {
+                    // Fallback to manual input if no SIP account is selected
+                    const channel = originateChannelInput.value;
+                    const exten = originateExtenInput.value;
+                    const context = originateContextInput.value;
+
+                    if (!channel || !exten || !context) {
+                        appendLog('Пожалуйста, заполните все поля Originate или выберите SIP аккаунт.', 'error');
+                        return;
+                    }
+
+                    originateAction = {
+                        Action: 'Originate',
+                        Channel: channel,
+                        Exten: exten,
+                        Context: context,
+                        Priority: 1,
+                        Callerid: 'NodeJS Web <2000>'
+                    };
+                    appendLog(`Отправка Originate на ${channel} -> ${exten}@${context}...`, 'info', activeWsId);
+                }
+                
+                ws.send(JSON.stringify({ type: 'ami_action', action: originateAction }));
+            }
+        });
+
+        joinConferenceButton.addEventListener('click', () => {
+            const ws = getActiveWs();
+            if (ws) {
+                const confName = conferenceNameInput.value.trim();
+                if (!confName) {
+                    appendLog('Пожалуйста, введите имя конференции.', 'error');
+                    return;
+                }
+                ws.send(JSON.stringify({ type: 'join_conference', conferenceName: confName }));
+                appendLog(`Попытка присоединиться к конференции "${confName}" для мониторинга DTMF...`, 'info', activeWsId);
+            }
+        });
+
+        resetDtmfButton.addEventListener('click', () => {
+            accumulatedDtmf = '';
+            dtmfDisplayDiv.textContent = 'Ожидание DTMF...';
+            appendLog('Накопленные DTMF-сигналы сброшены.', 'info');
+        });
+
+        dialNumberButton.addEventListener('click', () => {
+            if (accumulatedDtmf) {
+                const telLink = `tel:${accumulatedDtmf}`;
+                appendLog(`Попытка набрать номер: ${accumulatedDtmf} через "${telLink}"`, 'info');
+                window.location.href = telLink;
+            } else {
+                appendLog('Нет DTMF-сигналов для набора.', 'error');
+            }
+        });
+
+        linkSchemeSelect.addEventListener('change', () => {
+            linkValueInput.value = '';
+            generatedLinkDisplay.textContent = 'Сгенерированная ссылка:';
+        });
+
+        generateAndOpenLinkButton.addEventListener('click', () => {
+            const scheme = linkSchemeSelect.value;
+            let value = linkValueInput.value.trim();
+            let fullLink = '';
+
+            if (!value) {
+                appendLog('Пожалуйста, введите значение для ссылки.', 'error');
+                return;
+            }
+
+            if ((scheme === 'http://' || scheme === 'https://') && (value.startsWith('http://') || value.startsWith('https://'))) {
+                fullLink = value;
+            } else {
+                fullLink = scheme + value;
+            }
+
+            generatedLinkDisplay.textContent = `Сгенерированная ссылка: ${fullLink}`;
+            appendLog(`Сгенерирована и открыта ссылка: ${fullLink}`, 'info');
+            window.location.href = fullLink;
+        });
+
+        // --- ADB Functions ---
+        function populateAdbDevices(devices) {
+            adbDeviceSelect.innerHTML = '<option value="">-- Выберите устройство --</option>';
+            if (devices && devices.length > 0) {
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    option.textContent = `${device.id} (${device.type})`;
+                    adbDeviceSelect.appendChild(option);
+                });
+            } else {
+                adbDeviceSelect.innerHTML = '<option value="">Нет ADB устройств</option>';
+            }
+        }
+
+        function sendAdbAction(actionType, value = null) {
+            const ws = getActiveWs();
+            if (!ws) return;
+
+            const deviceId = adbDeviceSelect.value;
+            if (!deviceId) {
+                appendLog('Пожалуйста, выберите ADB устройство.', 'error');
+                return;
+            }
+
+            ws.send(JSON.stringify({
+                type: 'adb_action',
+                deviceId: deviceId,
+                actionType: actionType,
+                value: value
+            }));
+            appendLog(`Отправка ADB действия "${actionType}" на устройство ${deviceId}...`, 'adb', activeWsId);
+        });
+
+        adbDialButton.addEventListener('click', () => {
+            const phoneNumber = adbPhoneNumberInput.value.trim();
+            if (!phoneNumber) {
+                appendLog('Пожалуйста, введите номер телефона для набора.', 'error');
+                return;
+            }
+            sendAdbAction('dial', phoneNumber);
+        });
+
+        adbAnswerButton.addEventListener('click', () => {
+            sendAdbAction('answer');
+        });
+
+        adbHangupButton.addEventListener('click', () => {
+            sendAdbAction('hangup');
+        });
+
+
+        // --- Функции для аудио/микрофона (заглушки) ---
+
+        async function populateAudioDevices() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                stream.getTracks().forEach(track => track.stop());
+
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                audioInputSelect.innerHTML = '<option value="">-- Выберите микрофон --</option>';
+                audioOutputSelect.innerHTML = '<option value="">-- Выберите динамики --</option>';
+
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.textContent = device.label || `Устройство ${device.kind} ${device.deviceId.substring(0, 8)}...`;
+                    if (device.kind === 'audioinput') {
+                        audioInputSelect.appendChild(option);
+                    } else if (device.kind === 'audiooutput') {
+                        audioOutputSelect.appendChild(option);
+                    }
+                });
+                appendLog('Аудиоустройства загружены.', 'info');
+            } catch (err) {
+                appendLog(`Ошибка загрузки аудиоустройств: ${err.name} - ${err.message}. Возможно, нет разрешений.`, 'error');
+                console.error('Error enumerating devices:', err);
+            }
+        }
+
+        muteMicrophoneButton.addEventListener('click', () => {
+            appendLog('Функция "Выключить микрофон" не реализована в этой версии (требуется WebRTC).', 'info');
+        });
+
+        testAudioButton.addEventListener('click', () => {
+            appendLog('Функция "Тест аудио" не реализована в этой версии (требуется WebRTC).', 'info');
+        });
+
+
+        // --- Authentication Logic ---
+        async function authenticate(type) { // 'login' or 'register'
+            const username = authUsernameInput.value.trim();
+            const password = authPasswordInput.value.trim();
+
+            if (!username || !password) {
+                displayAuthMessage('Пожалуйста, введите имя пользователя и пароль.', 'danger');
+                return;
+            }
+
+            authMessageDiv.classList.add('d-none'); // Hide previous messages
+
+            try {
+                const response = await fetch(`/${type}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    authToken = data.token;
+                    currentUsername = username;
+                    localStorage.setItem('authToken', authToken); // Store token
+                    localStorage.setItem('username', currentUsername); // Store username
+                    displayAuthMessage(data.message, 'success');
+                    setTimeout(showApp, 1000); // Show main app after a short delay
+                } else {
+                    displayAuthMessage(data.message || 'Ошибка авторизации/регистрации', 'danger');
+                }
+            } catch (error) {
+                console.error('Ошибка при запросе авторизации:', error);
+                displayAuthMessage('Ошибка подключения к серверу авторизации.', 'danger');
+            }
+        }
+
+        function displayAuthMessage(message, type) {
+            authMessageDiv.textContent = message;
+            authMessageDiv.classList.remove('d-none', 'alert-danger', 'alert-success');
+            authMessageDiv.classList.add(`alert-${type}`);
+        }
+
+        function showAuthForm() {
+            authContainer.classList.remove('d-none');
+            appContainer.classList.add('d-none');
+            authToken = null;
+            currentUsername = null;
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('username');
+            localStorage.removeItem('wsConnections'); // Clear all stored connections on logout
+            wsConnections = []; // Clear connections list
+            wsCounter = 0; // Reset counter
+            updateActiveWsSelect();
+            updateGlobalConnectionStatus();
+            updateGlobalAmiStatus('Неизвестно');
+            appendLog('Вы вышли из системы.', 'info');
+            stopAutomation(); // Stop any running automation on logout
+        }
+
+        function showApp() {
+            authContainer.classList.add('d-none');
+            appContainer.classList.remove('d-none');
+            loggedInUsernameSpan.textContent = currentUsername;
+            
+            // Load and initialize WebSocket connections and devices after showing app
+            loadConnectionsFromLocalStorage(); // Load existing connections
+            updateActiveWsSelect(); // Populate dropdown and render SIP accounts for initial active connection
+            
+            // Connect to the first connection if available
+            if (wsConnections.length > 0 && wsConnections[0].wsInstance === null) {
+                activeWsId = wsConnections[0].id; // Ensure the first connection is active
+                activeWsSelect.value = activeWsId;
+                connectWebSocket(activeWsId);
+            }
+
+            populateAudioDevices();
+            // Bootstrap's JS handles showing the first tab by default with 'show active' classes
+            // No need to call showPage here explicitly unless you want to force a specific tab
+        }
+
+        // --- Event Listeners for Auth ---
+        loginButton.addEventListener('click', () => authenticate('login'));
+        registerButton.addEventListener('click', () => authenticate('register'));
+        logoutButton.addEventListener('click', showAuthForm);
+
+
+        // --- Initial Load ---
+        window.onload = () => {
+            if (authToken && currentUsername) {
+                showApp();
+            } else {
+                showAuthForm();
+            }
+        };
+    </script>
+</body>
+</html>

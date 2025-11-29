@@ -1,21 +1,88 @@
 // admin-backend/server.js
 const http = require('http');
 const WebSocket = require('ws');
-const { Manager } = require('asterisk-manager');
-const { Adb } = require('@devicefarmer/adbkit');
+const net = require('net');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const logger = require('./logger'); // Путь к логгеру внутри контейнера
+const { findAvailablePort: findPort, isPortFullyAvailable } = require('../utils/port-finder');
+
+// Импорт asterisk-manager (экспортирует Manager напрямую)
+let Manager;
+try {
+    Manager = require('asterisk-manager');
+    if (typeof Manager !== 'function') {
+        logger.error('[AMI] Manager не является конструктором. Проверьте установку пакета asterisk-manager.');
+        Manager = null;
+    }
+} catch (error) {
+    logger.error('[AMI] Ошибка импорта asterisk-manager:', error);
+    Manager = null;
+}
+const { Adb } = require('@devicefarmer/adbkit');
 
 // --- Конфигурация сервера ---
-const WEB_PORT = 8181; // Порт для HTTP-сервера и WebSocket внутри контейнера
-const AMI_HOST = process.env.AMI_HOST || '213.165.48.17'; // IP-адрес Asterisk, можно задать через переменную окружения Docker
-const AMI_PORT = process.env.AMI_PORT || 6038;        // Порт AMI Asterisk
-const AMI_USERNAME = process.env.AMI_USERNAME || 'vss_1'; // Имя пользователя AMI
-const AMI_PASSWORD = process.env.AMI_PASSWORD || 'QmlVdWNndTdRYlk9'; // Пароль AMI
+const DEFAULT_WEB_PORT = parseInt(process.env.WEB_PORT) || 8181; // Порт для HTTP-сервера и WebSocket внутри контейнера
+let WEB_PORT = DEFAULT_WEB_PORT;
+let serverRestartAttempts = 0;
+const MAX_SERVER_RESTART_ATTEMPTS = 10;
 const SALT_ROUNDS = 10;
+
+// --- Файл конфигурации AMI ---
+const CONFIG_FILE = path.join('/app', 'config.json');
+
+// --- Настройки AMI (загружаются из config.json или переменных окружения) ---
+let amiConfig = {
+    host: process.env.AMI_HOST || '213.165.48.17',
+    port: parseInt(process.env.AMI_PORT || '6038'),
+    username: process.env.AMI_USERNAME || 'vss_1',
+    password: process.env.AMI_PASSWORD || 'QmlVdWNndTdRYlk9'
+};
+
+// Загрузка настроек из файла
+function loadAmiConfig() {
+    try {
+        if (fs.existsSync(CONFIG_FILE)) {
+            const data = fs.readFileSync(CONFIG_FILE, 'utf8');
+            if (data.trim().length > 0) {
+                const config = JSON.parse(data);
+                if (config.ami) {
+                    amiConfig = {
+                        host: config.ami.host || amiConfig.host,
+                        port: parseInt(config.ami.port || amiConfig.port),
+                        username: config.ami.username || amiConfig.username,
+                        password: config.ami.password || amiConfig.password
+                    };
+                    logger.info('[CONFIG] Настройки AMI загружены из config.json');
+                }
+            }
+        } else {
+            logger.info('[CONFIG] Файл config.json не найден. Используются настройки по умолчанию.');
+        }
+    } catch (error) {
+        logger.error('[CONFIG] Ошибка загрузки config.json:', error);
+    }
+}
+
+// Сохранение настроек в файл
+function saveAmiConfig() {
+    try {
+        const config = {
+            ami: amiConfig
+        };
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
+        logger.info('[CONFIG] Настройки AMI сохранены в config.json');
+        return true;
+    } catch (error) {
+        logger.error('[CONFIG] Ошибка сохранения config.json:', error);
+        return false;
+    }
+}
 
 // --- Конфигурация CORS ---
 // ВНИМАНИЕ: ALLOWED_ORIGIN должен указывать на URL, с которого будет доступен ваш фронтенд админки.
@@ -79,8 +146,83 @@ let nextWsId = 1;
 
 let globalAmiManager = null;
 let amiStatus = 'disconnected';
+let amiReconnectAttempts = 0;
+const MAX_AMI_RECONNECT_ATTEMPTS = parseInt(process.env.AMI_MAX_RECONNECT_ATTEMPTS) || 10;
+const INITIAL_AMI_RECONNECT_DELAY = parseInt(process.env.AMI_RECONNECT_DELAY) || 5000; // 5 секунд начальная задержка
+const AMI_ENABLED = process.env.AMI_ENABLED !== 'false'; // Можно отключить через переменную окружения
+const AMI_AUTO_RECONNECT = process.env.AMI_AUTO_RECONNECT !== 'false'; // Можно отключить автопереподключение
+let lastAmiErrorLogTime = 0;
+const AMI_ERROR_LOG_INTERVAL = 60000; // Логировать ошибки не чаще раза в минуту
 
-const adbClient = Adb.createClient(); // ADB клиент
+// ADB Configuration
+let adbConfig = {
+    enabled: process.env.ADB_ENABLED === 'true' || false,
+    path: process.env.ADB_PATH || (process.platform === 'win32' ? 'adb.exe' : 'adb'),
+    port: parseInt(process.env.ADB_PORT || '5037'),
+    autoStart: process.env.ADB_AUTO_START === 'true' || false
+};
+
+// Load ADB config from file
+function loadAdbConfig() {
+    try {
+        const configFile = path.join('/app', 'adb-config.json');
+        if (fs.existsSync(configFile)) {
+            const data = fs.readFileSync(configFile, 'utf8');
+            if (data.trim().length > 0) {
+                const config = JSON.parse(data);
+                adbConfig = {
+                    enabled: config.enabled !== undefined ? config.enabled : adbConfig.enabled,
+                    path: config.path || adbConfig.path,
+                    port: config.port || adbConfig.port,
+                    autoStart: config.autoStart !== undefined ? config.autoStart : adbConfig.autoStart
+                };
+                logger.info('[ADB] Настройки ADB загружены из adb-config.json');
+            }
+        }
+    } catch (error) {
+        logger.error('[ADB] Ошибка загрузки adb-config.json:', error);
+    }
+}
+
+// Save ADB config to file
+function saveAdbConfig() {
+    try {
+        const configFile = path.join('/app', 'adb-config.json');
+        fs.writeFileSync(configFile, JSON.stringify(adbConfig, null, 2), 'utf8');
+        logger.info('[ADB] Настройки ADB сохранены в adb-config.json');
+        return true;
+    } catch (error) {
+        logger.error('[ADB] Ошибка сохранения adb-config.json:', error);
+        return false;
+    }
+}
+
+// Create ADB client with custom path
+let adbClient = null;
+function createAdbClient() {
+    if (!adbConfig.enabled) {
+        logger.info('[ADB] ADB отключен в настройках');
+        return null;
+    }
+    
+    try {
+        // Set ADB path in environment if custom path is provided
+        if (adbConfig.path && adbConfig.path !== 'adb' && adbConfig.path !== 'adb.exe') {
+            process.env.PATH = `${path.dirname(adbConfig.path)}${path.delimiter}${process.env.PATH}`;
+        }
+        
+        const client = Adb.createClient({
+            port: adbConfig.port,
+            bin: adbConfig.path
+        });
+        logger.info(`[ADB] ADB клиент создан (path: ${adbConfig.path}, port: ${adbConfig.port})`);
+        return client;
+    } catch (error) {
+        logger.error('[ADB] Ошибка создания ADB клиента:', error);
+        return null;
+    }
+}
+
 let adbDevices = [];
 
 const PERMISSIONS = {
@@ -131,7 +273,7 @@ function isAuthorizedForAdbAction(username, actionType) {
 
 const server = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
@@ -213,6 +355,144 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({ message: 'Неверный формат запроса или ошибка хеширования' }));
             }
         });
+    } else if (req.url === '/api/config/ami' && req.method === 'GET') {
+        // Получение настроек AMI
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+            success: true, 
+            config: {
+                host: amiConfig.host,
+                port: amiConfig.port,
+                username: amiConfig.username,
+                // Пароль не возвращаем для безопасности, только маску
+                password: amiConfig.password ? '***' : ''
+            }
+        }));
+    } else if (req.url === '/api/config/adb' && req.method === 'GET') {
+        // Получение настроек ADB
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+            success: true, 
+            config: {
+                enabled: adbConfig.enabled,
+                path: adbConfig.path,
+                port: adbConfig.port,
+                autoStart: adbConfig.autoStart
+            }
+        }));
+    } else if (req.url === '/api/config/adb' && req.method === 'PUT') {
+        // Сохранение настроек ADB
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', async () => {
+            try {
+                const { enabled, path: adbPath, port, autoStart } = JSON.parse(body);
+                
+                // Валидация
+                if (port && (isNaN(port) || port < 1024 || port > 65535)) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: 'Порт должен быть числом от 1024 до 65535' }));
+                    return;
+                }
+                
+                // Обновляем настройки
+                adbConfig = {
+                    enabled: enabled !== undefined ? enabled : adbConfig.enabled,
+                    path: adbPath || adbConfig.path,
+                    port: port || adbConfig.port,
+                    autoStart: autoStart !== undefined ? autoStart : adbConfig.autoStart
+                };
+                
+                // Сохраняем в файл
+                if (saveAdbConfig()) {
+                    // Пересоздаем ADB клиент с новыми настройками
+                    adbClient = createAdbClient();
+                    
+                    // Перезапускаем обнаружение устройств и ждем завершения
+                    try {
+                        await discoverAdbDevices();
+                    } catch (discoverError) {
+                        logger.warn('[ADB] Ошибка при обнаружении устройств после обновления настроек:', discoverError);
+                        // Продолжаем выполнение, так как настройки уже сохранены
+                    }
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ 
+                        success: true, 
+                        message: 'Настройки ADB сохранены и применены',
+                        config: adbConfig
+                    }));
+                    logger.info('[ADB] Настройки ADB обновлены через API');
+                } else {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: 'Ошибка сохранения настроек' }));
+                }
+            } catch (e) {
+                logger.error('[ADB] Ошибка при обработке /api/config/adb:', e);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: 'Неверный формат запроса' }));
+            }
+        });
+    } else if (req.url === '/api/config/ami' && req.method === 'PUT') {
+        // Сохранение настроек AMI
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', () => {
+            try {
+                const { host, port, username, password } = JSON.parse(body);
+                
+                // Валидация
+                if (!host || !port || !username || !password) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: 'Все поля обязательны' }));
+                    return;
+                }
+                
+                if (isNaN(port) || port < 1 || port > 65535) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: 'Порт должен быть числом от 1 до 65535' }));
+                    return;
+                }
+                
+                // Обновляем настройки
+                amiConfig = {
+                    host: host.trim(),
+                    port: parseInt(port),
+                    username: username.trim(),
+                    password: password.trim()
+                };
+                
+                // Сохраняем в файл
+                if (saveAmiConfig()) {
+                    // Переподключаемся к AMI с новыми настройками
+                    connectGlobalAmi();
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ 
+                        success: true, 
+                        message: 'Настройки AMI сохранены и применены',
+                        config: {
+                            host: amiConfig.host,
+                            port: amiConfig.port,
+                            username: amiConfig.username,
+                            password: '***'
+                        }
+                    }));
+                    logger.info('[CONFIG] Настройки AMI обновлены через API');
+                } else {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: 'Ошибка сохранения настроек' }));
+                }
+            } catch (e) {
+                logger.error('[CONFIG] Ошибка при обработке /api/config/ami:', e);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: 'Неверный формат запроса' }));
+            }
+        });
     } else {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not Found');
@@ -260,39 +540,151 @@ function broadcastAmiEvent(event) {
 }
 
 function connectGlobalAmi() {
-    logger.info(`[AMI_GLOBAL] Попытка подключения к AMI на ${AMI_HOST}:${AMI_PORT}...`);
+    // Проверяем, включен ли AMI
+    if (!AMI_ENABLED) {
+        logger.info('[AMI_GLOBAL] ℹ️  AMI отключен через переменную окружения AMI_ENABLED=false');
+        amiStatus = 'disabled';
+        broadcastToAllClients({ type: 'ami_status', status: 'disabled', message: 'AMI отключен в настройках' });
+        return;
+    }
+
+    if (!Manager) {
+        logger.error('[AMI_GLOBAL] Manager не доступен. Проверьте установку пакета asterisk-manager.');
+        amiStatus = 'disconnected';
+        broadcastToAllClients({ type: 'ami_status', status: 'disconnected', message: 'AMI Manager не доступен. Проверьте установку пакета.' });
+        return;
+    }
+
+    // Логируем только при первой попытке или если прошло достаточно времени
+    const now = Date.now();
+    if (amiReconnectAttempts === 0 || (now - lastAmiErrorLogTime) > AMI_ERROR_LOG_INTERVAL) {
+        logger.info(`[AMI_GLOBAL] Попытка подключения к AMI на ${amiConfig.host}:${amiConfig.port}...`);
+        lastAmiErrorLogTime = now;
+    }
+
     if (globalAmiManager) {
-        globalAmiManager.disconnect();
+        try {
+            globalAmiManager.removeAllListeners();
+            globalAmiManager.disconnect();
+        } catch (e) {
+            // Игнорируем ошибки при отключении
+        }
         globalAmiManager = null;
     }
 
-    globalAmiManager = new Manager(AMI_PORT, AMI_HOST, AMI_USERNAME, AMI_PASSWORD, true);
+    try {
+        // Проверяем, является ли Manager функцией/конструктором
+        if (typeof Manager !== 'function') {
+            throw new Error('Manager is not a constructor. Проверьте импорт пакета asterisk-manager.');
+        }
+        globalAmiManager = new Manager(amiConfig.port, amiConfig.host, amiConfig.username, amiConfig.password, true);
+    } catch (error) {
+        const now = Date.now();
+        const shouldLog = amiReconnectAttempts === 0 || (now - lastAmiErrorLogTime) > AMI_ERROR_LOG_INTERVAL;
+        
+        if (shouldLog) {
+            logger.error(`[AMI_GLOBAL] Ошибка создания Manager:`, error);
+            lastAmiErrorLogTime = now;
+        }
+        
+        amiStatus = 'disconnected';
+        broadcastToAllClients({ type: 'ami_status', status: 'disconnected', message: `Ошибка создания AMI Manager: ${error.message}` });
+        
+        if (AMI_AUTO_RECONNECT) {
+            scheduleAmiReconnect();
+        }
+        return;
+    }
+    
     amiStatus = 'connecting';
-    broadcastToAllClients({ type: 'ami_status', status: 'reconnecting', message: 'Подключение к AMI...' });
+    if (amiReconnectAttempts === 0) {
+        broadcastToAllClients({ type: 'ami_status', status: 'connecting', message: 'Подключение к AMI...' });
+    } else {
+        broadcastToAllClients({ type: 'ami_status', status: 'reconnecting', message: `Переподключение к AMI (попытка ${amiReconnectAttempts})...` });
+    }
 
     globalAmiManager.on('connect', () => {
-        logger.info(`[AMI_GLOBAL] Подключен к Asterisk AMI.`);
+        logger.info(`[AMI_GLOBAL] ✅ Подключен к Asterisk AMI.`);
         amiStatus = 'connected';
+        amiReconnectAttempts = 0; // Сбрасываем счетчик при успешном подключении
+        lastAmiErrorLogTime = 0; // Сбрасываем таймер ошибок
         broadcastToAllClients({ type: 'ami_status', status: 'connected', message: 'Подключен к AMI.' });
         globalAmiManager.on('managerevent', broadcastAmiEvent);
     });
 
     globalAmiManager.on('disconnect', () => {
-        logger.warn(`[AMI_GLOBAL] Отключен от Asterisk AMI. Попытка переподключения через 5 секунд...`);
+        const now = Date.now();
+        const shouldLog = (now - lastAmiErrorLogTime) > AMI_ERROR_LOG_INTERVAL;
+        
+        if (shouldLog) {
+            logger.warn(`[AMI_GLOBAL] Отключен от Asterisk AMI.`);
+            lastAmiErrorLogTime = now;
+        }
+        
         amiStatus = 'disconnected';
         broadcastToAllClients({ type: 'ami_status', status: 'disconnected', message: 'Отключен от AMI. Переподключение...' });
+        
         if (globalAmiManager) {
             globalAmiManager.removeAllListeners('managerevent');
             globalAmiManager.removeAllListeners('response');
         }
-        setTimeout(connectGlobalAmi, 5000);
+        
+        if (AMI_AUTO_RECONNECT) {
+            scheduleAmiReconnect();
+        }
     });
 
     globalAmiManager.on('error', err => {
-        logger.error(`[AMI_GLOBAL] Ошибка AMI:`, err);
+        const now = Date.now();
+        const shouldLog = (now - lastAmiErrorLogTime) > AMI_ERROR_LOG_INTERVAL;
+        
+        if (shouldLog) {
+            logger.error(`[AMI_GLOBAL] ❌ Ошибка AMI:`, err.message);
+            lastAmiErrorLogTime = now;
+        }
+        
         amiStatus = 'disconnected';
         broadcastToAllClients({ type: 'ami_status', status: 'disconnected', message: `Ошибка AMI: ${err.message}. Переподключение...` });
+        
+        if (AMI_AUTO_RECONNECT) {
+            scheduleAmiReconnect();
+        }
     });
+}
+
+// Функция для планирования переподключения AMI
+function scheduleAmiReconnect() {
+    if (!AMI_AUTO_RECONNECT) {
+        return; // Автопереподключение отключено
+    }
+
+    if (amiReconnectAttempts >= MAX_AMI_RECONNECT_ATTEMPTS) {
+        const now = Date.now();
+        if ((now - lastAmiErrorLogTime) > AMI_ERROR_LOG_INTERVAL) {
+            logger.error(`[AMI_GLOBAL] ❌ Превышено максимальное количество попыток переподключения (${MAX_AMI_RECONNECT_ATTEMPTS}). Остановка попыток переподключения.`);
+            logger.log('[AMI_GLOBAL] ℹ️  Для повторной попытки перезапустите сервис или установите AMI_AUTO_RECONNECT=true');
+            lastAmiErrorLogTime = now;
+        }
+        return;
+    }
+    
+    amiReconnectAttempts++;
+    // Используем экспоненциальную задержку с начальной задержкой
+    const delay = INITIAL_AMI_RECONNECT_DELAY * Math.pow(1.5, amiReconnectAttempts - 1);
+    const delaySeconds = Math.round(delay / 1000);
+    
+    // Логируем только каждую 3-ю попытку или если прошло достаточно времени
+    const now = Date.now();
+    if (amiReconnectAttempts % 3 === 0 || amiReconnectAttempts === 1 || (now - lastAmiErrorLogTime) > AMI_ERROR_LOG_INTERVAL) {
+        logger.log(`[AMI_GLOBAL] 🔄 Попытка переподключения к AMI через ${delaySeconds} секунд (попытка ${amiReconnectAttempts}/${MAX_AMI_RECONNECT_ATTEMPTS})...`);
+        lastAmiErrorLogTime = now;
+    }
+    
+    setTimeout(() => {
+        if (!globalAmiManager || amiStatus !== 'connected') {
+            connectGlobalAmi();
+        }
+    }, delay);
 }
 
 function broadcastToAllClients(message) {
@@ -390,20 +782,85 @@ wss.on('connection', ws => {
     });
 });
 
+let lastAdbErrorLogTime = 0;
+const ADB_ERROR_LOG_INTERVAL = 60000; // Логировать ошибки не чаще раза в минуту
+
 async function discoverAdbDevices() {
+    if (!adbConfig.enabled) {
+        logger.debug('[ADB] ADB отключен, пропускаем обнаружение устройств');
+        adbDevices = [];
+        clients.forEach(ws => {
+            if (ws.isAuthenticated) {
+                sendAdbDevicesToClient(ws);
+            }
+        });
+        return;
+    }
+
+    if (!adbClient) {
+        adbClient = createAdbClient();
+        if (!adbClient) {
+            const now = Date.now();
+            if ((now - lastAdbErrorLogTime) > ADB_ERROR_LOG_INTERVAL) {
+                logger.warn('[ADB] Не удалось создать ADB клиент. Проверьте настройки ADB.');
+                lastAdbErrorLogTime = now;
+            }
+            adbDevices = [];
+            clients.forEach(ws => {
+                if (ws.isAuthenticated) {
+                    sendAdbDevicesToClient(ws);
+                }
+            });
+            return;
+        }
+    }
+
     try {
+        // Auto-start ADB server if enabled
+        if (adbConfig.autoStart) {
+            try {
+                // execAsync уже определен на уровне модуля
+                await execAsync(`${adbConfig.path} -P ${adbConfig.port} start-server`);
+                logger.info('[ADB] ADB сервер запущен автоматически');
+            } catch (startError) {
+                const now = Date.now();
+                if ((now - lastAdbErrorLogTime) > ADB_ERROR_LOG_INTERVAL) {
+                    logger.warn(`[ADB] Не удалось автоматически запустить ADB сервер: ${startError.message}`);
+                    lastAdbErrorLogTime = now;
+                }
+            }
+        }
+
         const devices = await adbClient.listDevices();
         adbDevices = devices;
-        logger.info('[ADB] Обнаружены устройства:', adbDevices.map(d => d.id).join(', '));
+        logger.info('[ADB] Обнаружены устройства:', adbDevices.map(d => d.id).join(', ') || 'нет устройств');
+        lastAdbErrorLogTime = 0; // Сбрасываем таймер ошибок при успехе
         clients.forEach(ws => {
             if (ws.isAuthenticated) {
                 sendAdbDevicesToClient(ws);
             }
         });
     } catch (err) {
-        logger.error('[ADB] Ошибка обнаружения устройств:', err);
+        const now = Date.now();
+        const shouldLog = (now - lastAdbErrorLogTime) > ADB_ERROR_LOG_INTERVAL;
+        
+        if (shouldLog) {
+            logger.error('[ADB] Ошибка обнаружения устройств:', err.message);
+            if (err.code === 'ENOENT' || err.message.includes('spawn')) {
+                logger.error(`[ADB] ADB не найден по пути: ${adbConfig.path}. Проверьте настройки ADB в личном кабинете проекта.`);
+            }
+            lastAdbErrorLogTime = now;
+        }
+        
+        adbDevices = [];
         clients.forEach(ws => {
-            sendMessageToClient(ws, { type: 'error', message: `Ошибка ADB: ${err.message}` });
+            if (ws.isAuthenticated) {
+                sendMessageToClient(ws, { 
+                    type: 'error', 
+                    message: `Ошибка ADB: ${err.message}. Проверьте настройки ADB в личном кабинете проекта.` 
+                });
+                sendAdbDevicesToClient(ws);
+            }
         });
     }
 }
@@ -455,21 +912,152 @@ function sendMessageToClient(ws, message) {
     }
 }
 
-server.listen(WEB_PORT, async () => {
-    logger.info(`Сервер запущен на http://localhost:${WEB_PORT}`);
-    logger.info(`WebSocket сервер запущен на ws://localhost:${WEB_PORT}`);
+// Используем утилиту для проверки и поиска свободных портов
 
-    await loadUsers();
-    connectGlobalAmi();
+// Функция для очистки Docker контейнеров
+async function cleanupDockerContainers() {
+    try {
+        logger.info('[DOCKER] Очистка остановленных Docker контейнеров...');
+        
+        // Удаляем остановленные контейнеры
+        try {
+            const { stdout: containers } = await execAsync('docker ps -a -q -f status=exited');
+            if (containers.trim()) {
+                await execAsync(`docker rm ${containers.trim().split('\n').join(' ')}`);
+                logger.info('[DOCKER] Остановленные контейнеры удалены');
+            } else {
+                logger.info('[DOCKER] Нет остановленных контейнеров для удаления');
+            }
+        } catch (error) {
+            // Игнорируем ошибки, если Docker недоступен или нет контейнеров
+            if (!error.message.includes('Cannot connect') && !error.message.includes('No such')) {
+                logger.warn('[DOCKER] Предупреждение при очистке контейнеров:', error.message);
+            }
+        }
 
-    discoverAdbDevices();
-    setInterval(discoverAdbDevices, 30000);
-});
+        // Очищаем неиспользуемые образы (опционально, можно закомментировать если не нужно)
+        try {
+            await execAsync('docker image prune -f');
+            logger.info('[DOCKER] Неиспользуемые образы очищены');
+        } catch (error) {
+            // Игнорируем ошибки
+            logger.debug('[DOCKER] Очистка образов пропущена:', error.message);
+        }
+
+        // Очищаем неиспользуемые сети
+        try {
+            await execAsync('docker network prune -f');
+            logger.info('[DOCKER] Неиспользуемые сети очищены');
+        } catch (error) {
+            // Игнорируем ошибки
+            logger.debug('[DOCKER] Очистка сетей пропущена:', error.message);
+        }
+
+        logger.info('[DOCKER] Очистка Docker завершена');
+    } catch (error) {
+        // Если Docker недоступен, просто логируем и продолжаем
+        if (error.message.includes('Cannot connect') || error.message.includes('docker')) {
+            logger.warn('[DOCKER] Docker недоступен, пропускаем очистку. Это нормально, если Docker не установлен или не запущен.');
+        } else {
+            logger.warn('[DOCKER] Ошибка при очистке Docker:', error.message);
+        }
+    }
+}
+
+// Запуск сервера с автоматическим поиском свободного порта
+async function startServer(portOffset = 0) {
+    try {
+        // Очищаем Docker контейнеры при запуске
+        await cleanupDockerContainers();
+
+        // Пытаемся найти свободный порт, начиная с DEFAULT_WEB_PORT + offset (используем утилиту)
+        const startPort = DEFAULT_WEB_PORT + portOffset;
+        WEB_PORT = await findPort(startPort, 100, true);
+        
+        // Сбрасываем счетчик попыток при успешном поиске порта
+        serverRestartAttempts = 0;
+        
+        if (WEB_PORT !== DEFAULT_WEB_PORT) {
+            logger.warn(`⚠️  Порт ${DEFAULT_WEB_PORT} занят. Используется порт ${WEB_PORT}`);
+        }
+        
+        // Проверяем порт еще раз непосредственно перед привязкой для избежания race condition
+        const stillAvailable = await isPortFullyAvailable(WEB_PORT).catch(() => false);
+        if (!stillAvailable) {
+            // Порт стал недоступен, ищем новый
+            logger.warn(`⚠️  Порт ${WEB_PORT} стал недоступен. Поиск нового порта...`);
+            WEB_PORT = await findPort(WEB_PORT + 1, 100, true);
+        }
+        
+        server.listen(WEB_PORT, '0.0.0.0', async () => {
+            logger.info(`✅ Сервер запущен на http://localhost:${WEB_PORT}`);
+            logger.info(`✅ WebSocket сервер запущен на ws://localhost:${WEB_PORT}`);
+
+            await loadUsers();
+            loadAmiConfig(); // Загружаем настройки AMI из файла
+            connectGlobalAmi();
+
+            loadAdbConfig(); // Загружаем настройки ADB из файла
+            adbClient = createAdbClient(); // Создаем ADB клиент с настройками
+            discoverAdbDevices();
+            setInterval(discoverAdbDevices, 30000);
+        });
+    } catch (error) {
+        logger.error('❌ Ошибка запуска сервера:', error.message);
+        process.exit(1);
+    }
+}
 
 server.on('error', (err) => {
-    logger.error('Критическая ошибка HTTP-сервера:', err);
-    process.exit(1);
+    if (err.code === 'EADDRINUSE') {
+        serverRestartAttempts++;
+        if (serverRestartAttempts > MAX_SERVER_RESTART_ATTEMPTS) {
+            logger.error(`❌ Превышено максимальное количество попыток перезапуска сервера (${MAX_SERVER_RESTART_ATTEMPTS}). Завершение работы.`);
+            process.exit(1);
+        }
+        
+        logger.error(`❌ Порт ${WEB_PORT} уже занят. Попытка найти свободный порт... (попытка ${serverRestartAttempts}/${MAX_SERVER_RESTART_ATTEMPTS})`);
+        // Закрываем существующий сервер перед повторной попыткой
+        if (server.listening) {
+            server.close((closeErr) => {
+                if (closeErr) {
+                    logger.error('❌ Ошибка при закрытии сервера:', closeErr);
+                }
+                // Пытаемся перезапустить с другим портом, начиная с текущего + 1
+                const portOffset = WEB_PORT - DEFAULT_WEB_PORT + 1;
+                startServer(portOffset).catch(error => {
+                    logger.error('❌ Критическая ошибка HTTP-сервера:', error);
+                    // Если findAvailablePort выбросил ошибку (все порты заняты), завершаем работу
+                    if (error.message.includes('Не удалось найти свободный порт')) {
+                        logger.error('❌ Все доступные порты заняты. Невозможно запустить сервер.');
+                        process.exit(1);
+                    }
+                    // Для других ошибок также завершаем, чтобы избежать бесконечной рекурсии
+                    process.exit(1);
+                });
+            });
+        } else {
+            // Сервер не слушает, можно сразу перезапустить с offset
+            const portOffset = WEB_PORT - DEFAULT_WEB_PORT + 1;
+            startServer(portOffset).catch(error => {
+                logger.error('❌ Критическая ошибка HTTP-сервера:', error);
+                // Если findAvailablePort выбросил ошибку (все порты заняты), завершаем работу
+                if (error.message.includes('Не удалось найти свободный порт')) {
+                    logger.error('❌ Все доступные порты заняты. Невозможно запустить сервер.');
+                    process.exit(1);
+                }
+                // Для других ошибок также завершаем, чтобы избежать бесконечной рекурсии
+                process.exit(1);
+            });
+        }
+    } else {
+        logger.error('❌ Критическая ошибка HTTP-сервера:', err);
+        process.exit(1);
+    }
 });
+
+// Запускаем сервер
+startServer();
 
 process.on('uncaughtException', (err) => {
     logger.error('Необработанное исключение:', err);

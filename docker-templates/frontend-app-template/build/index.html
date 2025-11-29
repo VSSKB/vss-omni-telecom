@@ -1,47 +1,113 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VSS Frontend Placeholder</title>
+    <title>VSS Project Frontend</title>
     <style>
-        body { 
-            font-family: sans-serif; 
-            text-align: center; 
-            padding-top: 50px; 
-            background-color: #f0f0f0;
+        * {
             margin: 0;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            padding: 0;
+            box-sizing: border-box;
         }
-        h1 { 
-            color: #333; 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+        .container {
+            max-width: 800px;
+            width: 90%;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        h1 {
             font-size: 2.5em;
             margin-bottom: 20px;
+            text-align: center;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
-        p { 
-            color: #666; 
-            font-size: 1.2em;
-            line-height: 1.5;
-        }
-        div {
-            background-color: #fff;
-            padding: 30px;
+        .status {
+            background: rgba(76, 175, 80, 0.2);
+            padding: 15px;
             border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            max-width: 600px;
-            width: 90%;
+            margin: 20px 0;
+            border-left: 4px solid #4CAF50;
+        }
+        .endpoints {
+            margin-top: 30px;
+        }
+        .endpoint {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        a {
+            color: #4CAF50;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.3s;
+        }
+        a:hover {
+            color: #45a049;
+            text-decoration: underline;
+        }
+        .method {
+            background: #4CAF50;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.8em;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <div>
-        <h1>VSS Frontend Application</h1>
-        <p>This is a placeholder for your compiled frontend application.</p>
-        <p>Please build your actual React/Angular/Vue app and place its contents here (e.g., your `build` or `dist` folder).</p>
+    <div class="container">
+        <h1>🚀 VSS Project Frontend</h1>
+        <div class="status">
+            <strong>✅ Frontend application is running successfully!</strong>
+            <p style="margin-top: 10px; opacity: 0.9;">Backend API is ready to accept requests.</p>
+        </div>
+        
+        <div class="endpoints">
+            <h2 style="margin-bottom: 15px;">📚 Available API Endpoints:</h2>
+            <div class="endpoint">
+                <span><span class="method">GET</span> /</span>
+                <a href="/">API Information</a>
+            </div>
+            <div class="endpoint">
+                <span><span class="method">GET</span> /health</span>
+                <a href="/health">Health Check</a>
+            </div>
+            <div class="endpoint">
+                <span><span class="method">GET</span> /api/status</span>
+                <a href="/api/status">Server Status</a>
+            </div>
+            <div class="endpoint">
+                <span><span class="method">GET</span> /api/db-test</span>
+                <a href="/api/db-test">Database Test</a>
+            </div>
+            <div class="endpoint">
+                <span><span class="method">GET</span> /api/vss-users</span>
+                <a href="/api/vss-users">List Users</a>
+            </div>
+        </div>
     </div>
 </body>
 </html>

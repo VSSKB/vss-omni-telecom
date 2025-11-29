@@ -1,0 +1,163 @@
+version: "3.9"
+
+services:
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: vss_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - api
+    networks: [vss]
+
+  api:
+    image: node:20-alpine
+    container_name: vss_api
+    restart: always
+    working_dir: /app
+    command: ["node", "dist/main.js"]
+    volumes:
+      - ./services/workspace:/app
+      - ./config/archon.config.json:/app/archon.config.json:ro
+      - ./config/demiurge.config.json:/app/demiurge.config.json:ro
+    env_file: .env.production
+    networks: [vss]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  demiurge:
+    image: node:20-alpine
+    container_name: vss_demiurge
+    restart: always
+    working_dir: /app
+    command: ["node", "dist/main.js"]
+    volumes:
+      - ./services/ottb:/app
+      - ./config/demiurge.config.json:/app/config.json:ro
+    env_file: .env.production
+    depends_on: [rabbitmq, postgres]
+    networks: [vss]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  archon:
+    image: node:20-alpine
+    container_name: vss_archon
+    restart: always
+    working_dir: /app
+    command: ["node", "dist/main.js"]
+    volumes:
+      - ./services/dci:/app
+      - ./config/archon.config.json:/app/config.json:ro
+    env_file: .env.production
+    depends_on: [rabbitmq]
+    networks: [vss]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: vss_rabbitmq
+    hostname: rabbit
+    restart: always
+    volumes:
+      - ./config/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./config/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks: [vss]
+    environment:
+      RABBITMQ_DEFAULT_USER: vss
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-VssRabbitPass223}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  postgres:
+    image: postgres:14-alpine
+    container_name: vss_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: vss_db
+      POSTGRES_USER: vss
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Sup3rS3cur3Password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    networks: [vss]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vss"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgrest:
+    image: postgrest/postgrest:v12.0.2
+    container_name: vss_postgrest
+    restart: always
+    volumes:
+      - ./config/postgrest/postgrest.conf:/etc/postgrest.conf:ro
+    depends_on: [postgres]
+    networks: [vss]
+    environment:
+      PGRST_DB_URI: postgresql://vss:${POSTGRES_PASSWORD:-Sup3rS3cur3Password}@postgres:5432/vss_db
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: vss_anon
+
+  guacd:
+    image: guacamole/guacd:1.5.3
+    container_name: vss_guacd
+    restart: always
+    networks: [vss]
+    volumes:
+      - ./config/guacamole/guacd.conf:/etc/guacamole/guacd.conf:ro
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "guacd"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: vss_redis
+    restart: always
+    volumes:
+      - ./config/redis/redis.conf:/etc/redis/redis.conf:ro
+      - redis_data:/data
+    networks: [vss]
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  vss:
+    driver: bridge
+
+volumes:
+  rabbitmq_data:
+  postgres_data:
+  redis_data:
+

@@ -1,0 +1,333 @@
+services:
+  # Core Message Bus
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    hostname: rabbitmq
+    container_name: vss-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=vss-admin
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-vss_rabbit_pass}
+      - RABBITMQ_DEFAULT_VHOST=/vss
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ./config/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./config/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - vss-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: vss-postgres
+    environment:
+      - POSTGRES_DB=vss_db
+      - POSTGRES_USER=vss
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-vss_postgres_pass}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - vss-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vss -d vss_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: vss-redis
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - vss-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Core Services (OTTB, DCI, POINT, WORKSPACE)
+  vss-ottb:
+    build:
+      context: ./services/ottb
+      dockerfile: Dockerfile
+    container_name: vss-ottb
+    environment:
+      - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
+      - POSTGRES_URL=postgresql://vss:${DB_PASSWORD:-vss_postgres_pass}@postgres:5432/vss_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-vss_redis_pass}@redis:6379
+      - NODE_ENV=production
+      - SERVICE_NAME=ottb-core
+      - PORT=8083
+    ports:
+      - "8083:8083"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  vss-dci:
+    build:
+      context: ./services/dci
+      dockerfile: Dockerfile
+    container_name: vss-dci
+    environment:
+      - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
+      - POSTGRES_URL=postgresql://vss:${DB_PASSWORD:-vss_postgres_pass}@postgres:5432/vss_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-vss_redis_pass}@redis:6379
+      - NODE_ENV=production
+      - SERVICE_NAME=dci
+      - PORT=8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  vss-point:
+    build:
+      context: ./services/point
+      dockerfile: Dockerfile
+    container_name: vss-point
+    environment:
+      - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
+      - POSTGRES_URL=postgresql://vss:${DB_PASSWORD:-vss_postgres_pass}@postgres:5432/vss_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-vss_redis_pass}@redis:6379
+      - JWT_SECRET=${JWT_SECRET:-vss_jwt_secret_change_me}
+      - NODE_ENV=production
+      - SERVICE_NAME=point
+      - PORT=8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  vss-workspace:
+    build:
+      context: ./services/workspace
+      dockerfile: Dockerfile
+    container_name: vss-workspace
+    environment:
+      - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
+      - POINT_URL=http://vss-point:8081
+      - DCI_URL=http://vss-dci:8082
+      - OTTB_URL=http://vss-ottb:8083
+      - NODE_ENV=production
+      - SERVICE_NAME=workspace
+      - PORT=3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - vss-point
+      - vss-dci
+      - vss-ottb
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  # SIP Trunk Service - Kamailio
+  kamailio:
+    image: kamailio/kamailio-deb:5.7.0-bullseye
+    # build:
+    #   context: .
+    #   dockerfile: services/kamailio/Dockerfile
+    container_name: vss-kamailio
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=vss_db
+      - POSTGRES_USER=vss
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-vss_postgres_pass}
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+    volumes:
+      - ./config/sip/kamailio/kamailio.cfg:/etc/kamailio/kamailio.cfg:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  # SIP Trunk Service - Asterisk
+  asterisk:
+    image: andrius/asterisk:18-current
+    # build:
+    #   context: .
+    #   dockerfile: services/asterisk/Dockerfile
+    container_name: vss-asterisk
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=vss_db
+      - POSTGRES_USER=vss
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-vss_postgres_pass}
+    ports:
+      - "5061:5060/udp"
+      - "5061:5060/tcp"
+      - "10000-10099:10000-10099/udp"  # RTP ports
+    volumes:
+      - ./config/sip/asterisk/pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ./config/sip/asterisk/extensions.conf:/etc/asterisk/extensions.conf:ro
+      - ./config/sip/asterisk/cdr.conf:/etc/asterisk/cdr.conf:ro
+      - ./config/sip/asterisk/modules.conf:/etc/asterisk/modules.conf:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kamailio:
+        condition: service_started
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  # Custom Guacamole
+  guacd:
+    image: guacamole/guacd:1.5.0
+    container_name: vss-guacd
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  vss-guacamole:
+    image: guacamole/guacamole:1.5.3
+    container_name: vss-guacamole
+    environment:
+      - GUACD_HOSTNAME=guacd
+      - GUACD_PORT=4822
+      - POSTGRESQL_HOSTNAME=postgres
+      - POSTGRESQL_PORT=5432
+      - POSTGRESQL_DATABASE=vss_db
+      - POSTGRESQL_USER=vss
+      - POSTGRESQL_PASSWORD=${DB_PASSWORD:-vss_postgres_pass}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - guacd
+      - postgres
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  # NGINX RTMP Server for slot media streams
+  nginx-rtmp:
+    image: alfg/nginx-rtmp:latest
+    container_name: vss-nginx-rtmp
+    ports:
+      - "1935:1935"  # RTMP
+      - "8085:8085"  # HLS
+    volumes:
+      - ./config/nginx/nginx-rtmp.conf:/etc/nginx/nginx.conf:ro
+      - rtmp_recordings:/recordings
+      - rtmp_hls:/tmp/hls
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  # Frontend Nginx
+  nginx:
+    image: nginx:alpine
+    container_name: vss-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./public:/usr/share/nginx/html:ro
+      - ./config/nginx/nginx-vss.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - vss-workspace
+      - vss-ottb
+      - vss-dci
+      - vss-point
+      - vss-guacamole
+      - kamailio
+      - asterisk
+      - nginx-rtmp
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: vss-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: vss-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-vss_grafana_pass}
+      - GF_INSTALL_PLUGINS=rabbitmq-datasource
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - vss-network
+    restart: unless-stopped
+
+volumes:
+  rabbitmq_data:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  rtmp_recordings:
+  rtmp_hls:
+
+networks:
+  vss-network:
+    driver: bridge
+

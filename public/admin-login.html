@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <title>VSS DEMIURGE - Secure Access</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- VSS Custom Styles -->
+    <link rel="stylesheet" href="vss-theme/css/vss-main.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        .vss-login-container {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2c3e50 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .vss-login-card {
+            background: rgba(44, 62, 80, 0.95);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            border: 1px solid #34495e;
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .vss-login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .vss-logo {
+            background-image: url('vss-theme/images/vss-logo.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            width: 200px;
+            height: 60px;
+            margin: 0 auto 15px;
+        }
+        
+        .vss-login-title {
+            color: #ecf0f1;
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+        }
+        
+        .vss-login-subtitle {
+            color: #bdc3c7;
+            font-size: 14px;
+            margin: 0;
+        }
+        
+        .vss-login-form {
+            margin-bottom: 20px;
+        }
+        
+        .vss-form-group {
+            margin-bottom: 20px;
+        }
+        
+        .vss-form-label {
+            display: block;
+            color: #ecf0f1;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .vss-form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #34495e;
+            border-radius: 8px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+        
+        .vss-form-input:focus {
+            border-color: #3498db;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+        
+        .vss-form-select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #34495e;
+            border-radius: 8px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            font-size: 14px;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        
+        .vss-login-button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+        
+        .vss-login-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(52, 152, 219, 0.3);
+        }
+        
+        .vss-login-footer {
+            text-align: center;
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #34495e;
+        }
+        
+        .vss-footer-text {
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+        
+        .vss-system-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .vss-status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #bdc3c7;
+            font-size: 12px;
+        }
+        
+        .vss-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #27ae60;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .vss-error-message {
+            background: #e74c3c;
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="vss-login-container">
+        <div class="vss-login-card">
+            
+            <!-- Error Message -->
+            <div class="vss-error-message" id="error-message">
+                Invalid credentials. Please try again.
+            </div>
+            
+            <!-- Login Header -->
+            <div class="vss-login-header">
+                <div class="vss-logo"></div>
+                <h1 class="vss-login-title">VSS DEMIURGE</h1>
+                <p class="vss-login-subtitle">Secure Remote Access Gateway</p>
+            </div>
+            
+            <!-- Login Form -->
+            <form method="POST" class="vss-login-form" id="loginForm">
+                <div class="vss-form-group">
+                    <label class="vss-form-label" for="username">Username</label>
+                    <input type="text" 
+                           id="username" 
+                           name="username" 
+                           class="vss-form-input" 
+                           placeholder="Enter your VSS username" 
+                           required
+                           autocomplete="username">
+                </div>
+                
+                <div class="vss-form-group">
+                    <label class="vss-form-label" for="password">Password</label>
+                    <input type="password" 
+                           id="password" 
+                           name="password" 
+                           class="vss-form-input" 
+                           placeholder="Enter your password" 
+                           required
+                           autocomplete="current-password">
+                </div>
+                
+                <div class="vss-form-group">
+                    <label class="vss-form-label" for="role">Access Role</label>
+                    <select id="role" name="role" class="vss-form-select">
+                        <option value="operator">Operator</option>
+                        <option value="supervisor">Supervisor</option>
+                        <option value="admin">Administrator</option>
+                        <option value="seller">Seller</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="vss-login-button">
+                    🔐 Secure Login
+                </button>
+            </form>
+            
+            <!-- System Status -->
+            <div class="vss-system-status">
+                <div class="vss-status-item">
+                    <span class="vss-status-dot"></span>
+                    System Online
+                </div>
+                <div class="vss-status-item">
+                    <span class="vss-status-dot"></span>
+                    VPN Connected
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="vss-login-footer">
+                <p class="vss-footer-text">
+                    © 2024 VSS DEMIURGE OTTB Platform<br>
+                    Version 2.1.4 | Build 7892
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Получаем projectId из URL параметров
+        const urlParams = new URLSearchParams(window.location.search);
+        const projectId = urlParams.get('projectId');
+        const adminUrl = urlParams.get('adminUrl');
+        
+        // Show error message if login failed
+        if (urlParams.get('error') === 'true') {
+            document.getElementById('error-message').style.display = 'block';
+        }
+        
+        // Обработка формы входа
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const role = document.getElementById('role').value;
+            
+            const errorMsg = document.getElementById('error-message');
+            errorMsg.style.display = 'none';
+            
+            // Получаем adminUrl если его нет
+            let finalAdminUrl = adminUrl;
+            if (!finalAdminUrl && projectId) {
+                try {
+                    const response = await fetch(`/api/projects/${projectId}/info`);
+                    if (response.ok) {
+                        const projectInfo = await response.json();
+                        finalAdminUrl = projectInfo.adminUrl;
+                    }
+                } catch (error) {
+                    console.error('Ошибка получения информации о проекте:', error);
+                }
+            }
+            
+            if (!finalAdminUrl) {
+                errorMsg.textContent = 'Не удалось получить URL админки проекта.';
+                errorMsg.style.display = 'block';
+                return;
+            }
+            
+            // Отправляем запрос на сервер для аутентификации
+            try {
+                console.log('[LOGIN] Отправка запроса на /api/admin-login');
+                const response = await fetch('/api/admin-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        role: role,
+                        projectId: projectId,
+                        adminUrl: finalAdminUrl
+                    })
+                });
+                
+                console.log('[LOGIN] Получен ответ:', response.status, response.statusText);
+                
+                let result;
+                try {
+                    const responseText = await response.text();
+                    console.log('[LOGIN] Текст ответа:', responseText);
+                    result = JSON.parse(responseText);
+                    console.log('[LOGIN] Результат:', result);
+                } catch (parseError) {
+                    console.error('[LOGIN] Ошибка парсинга ответа:', parseError);
+                    errorMsg.textContent = 'Ошибка обработки ответа сервера. Проверьте консоль (F12) для деталей.';
+                    errorMsg.style.display = 'block';
+                    return;
+                }
+                
+                if (response.ok && result.success) {
+                    // Сохраняем sessionId и информацию о пользователе
+                    if (result.sessionId) {
+                        localStorage.setItem('vss_admin_session', result.sessionId);
+                    }
+                    if (result.user) {
+                        localStorage.setItem('vss_admin_user', JSON.stringify(result.user));
+                    }
+                    
+                    if (projectId) {
+                        localStorage.setItem('vss_admin_project_id', projectId);
+                    }
+                    if (finalAdminUrl || result.adminUrl) {
+                        localStorage.setItem('vss_admin_last_admin_url', finalAdminUrl || result.adminUrl);
+                    }
+                    
+                    // Успешный вход - перенаправляем на Панель управления VSS проектами
+                    const dashboardTarget = result.redirectUrl || `/dashboard${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`;
+                    window.location.href = dashboardTarget;
+                } else {
+                    // Ошибка входа
+                    const errorText = result.message || 'Неверные учетные данные. Попробуйте снова.';
+                    errorMsg.textContent = errorText;
+                    errorMsg.style.display = 'block';
+                    console.error('[LOGIN] Ошибка входа:', result);
+                }
+            } catch (error) {
+                console.error('[LOGIN] Ошибка входа:', error);
+                let errorText = 'Ошибка сети при попытке входа.';
+                if (error.message) {
+                    errorText += ` ${error.message}`;
+                } else if (error.toString) {
+                    errorText += ` ${error.toString()}`;
+                }
+                errorText += ' Попробуйте снова или проверьте консоль браузера (F12) для деталей.';
+                errorMsg.textContent = errorText;
+                errorMsg.style.display = 'block';
+            }
+        });
+        
+        // Focus on username field
+        document.getElementById('username').focus();
+    </script>
+</body>
+</html>
+

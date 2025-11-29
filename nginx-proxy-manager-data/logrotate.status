@@ -1,0 +1,5 @@
+logrotate state -- version 2
+"/data/logs/access.log" 2025-11-29-9:0:0
+"/data/logs/fallback_access.log" 2025-11-29-9:0:0
+"/data/logs/fallback_error.log" 2025-11-29-9:0:0
+"/data/logs/error.log" 2025-11-29-9:0:0

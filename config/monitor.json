@@ -1,0 +1,20 @@
+{
+  "services": {
+    "api": "http://localhost:3000/health",
+    "ottb": "http://localhost:8083/health",
+    "dci": "http://localhost:8082/health",
+    "workspace": "http://localhost:3000/health"
+  },
+  "intervals": {
+    "health_check": 30,
+    "metrics_collection": 15,
+    "alert_check": 60
+  },
+  "thresholds": {
+    "response_time": 2.0,
+    "cpu_usage": 80.0,
+    "memory_usage": 85.0,
+    "disk_usage": 90.0
+  }
+}
+

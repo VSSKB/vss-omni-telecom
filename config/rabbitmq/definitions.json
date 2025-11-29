@@ -1,0 +1,250 @@
+{
+  "rabbit_version": "3.12",
+  "vhosts": [
+    {
+      "name": "vss"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "vss-admin",
+      "vhost": "vss",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "vss.events",
+      "vhost": "vss",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "vss.commands",
+      "vhost": "vss",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "vss.rpc",
+      "vhost": "vss",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "vss.call.events",
+      "vhost": "vss",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-max-length": 10000
+      }
+    },
+    {
+      "name": "vss.slot.events",
+      "vhost": "vss",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-max-length": 10000
+      }
+    },
+    {
+      "name": "vss.slot.commands",
+      "vhost": "vss",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "vss.events",
+        "x-dead-letter-routing-key": "command.failed"
+      }
+    },
+    {
+      "name": "vss.autodial.leads",
+      "vhost": "vss",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 3600000,
+        "x-max-length": 50000
+      }
+    },
+    {
+      "name": "vss.gacs.commands",
+      "vhost": "vss",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "vss.events",
+        "x-dead-letter-routing-key": "gacs.failed"
+      }
+    },
+    {
+      "name": "vss.pipeline.events",
+      "vhost": "vss",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000,
+        "x-max-length": 10000
+      }
+    },
+    {
+      "name": "vss.system.alerts",
+      "vhost": "vss",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 604800000,
+        "x-max-length": 5000
+      }
+    },
+    {
+      "name": "vss.guacamole.sessions",
+      "vhost": "vss",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000
+      }
+    },
+    {
+      "name": "vss.archonts.deployments",
+      "vhost": "vss",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 86400000
+      }
+    },
+    {
+      "name": "vss.telemetry.metrics",
+      "vhost": "vss",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 3600000,
+        "x-max-length": 100000
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "source": "vss.events",
+      "vhost": "vss",
+      "destination": "vss.call.events",
+      "destination_type": "queue",
+      "routing_key": "call.*",
+      "arguments": {}
+    },
+    {
+      "source": "vss.events",
+      "vhost": "vss",
+      "destination": "vss.slot.events",
+      "destination_type": "queue",
+      "routing_key": "slot.*",
+      "arguments": {}
+    },
+    {
+      "source": "vss.commands",
+      "vhost": "vss",
+      "destination": "vss.slot.commands",
+      "destination_type": "queue",
+      "routing_key": "slot.*",
+      "arguments": {}
+    },
+    {
+      "source": "vss.commands",
+      "vhost": "vss",
+      "destination": "vss.autodial.leads",
+      "destination_type": "queue",
+      "routing_key": "autodial.lead",
+      "arguments": {}
+    },
+    {
+      "source": "vss.commands",
+      "vhost": "vss",
+      "destination": "vss.gacs.commands",
+      "destination_type": "queue",
+      "routing_key": "gacs.execute",
+      "arguments": {}
+    },
+    {
+      "source": "vss.events",
+      "vhost": "vss",
+      "destination": "vss.pipeline.events",
+      "destination_type": "queue",
+      "routing_key": "pipeline.*",
+      "arguments": {}
+    },
+    {
+      "source": "vss.events",
+      "vhost": "vss",
+      "destination": "vss.system.alerts",
+      "destination_type": "queue",
+      "routing_key": "system.alert",
+      "arguments": {}
+    },
+    {
+      "source": "vss.events",
+      "vhost": "vss",
+      "destination": "vss.guacamole.sessions",
+      "destination_type": "queue",
+      "routing_key": "guacamole.*",
+      "arguments": {}
+    },
+    {
+      "source": "vss.events",
+      "vhost": "vss",
+      "destination": "vss.archonts.deployments",
+      "destination_type": "queue",
+      "routing_key": "archonts.*",
+      "arguments": {}
+    },
+    {
+      "source": "vss.events",
+      "vhost": "vss",
+      "destination": "vss.telemetry.metrics",
+      "destination_type": "queue",
+      "routing_key": "telemetry.*",
+      "arguments": {}
+    }
+  ],
+  "policies": [
+    {
+      "vhost": "vss",
+      "name": "vss-message-ttl",
+      "pattern": "^vss\\.",
+      "apply-to": "queues",
+      "definition": {
+        "message-ttl": 86400000
+      },
+      "priority": 0
+    },
+    {
+      "vhost": "vss",
+      "name": "vss-ha-policy",
+      "pattern": "^vss\\.",
+      "apply-to": "queues",
+      "definition": {
+        "ha-mode": "all"
+      },
+      "priority": 1
+    }
+  ],
+  "parameters": [],
+  "global_parameters": [],
+  "topic_permissions": []
+}

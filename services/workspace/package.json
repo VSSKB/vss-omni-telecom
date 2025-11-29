@@ -1,0 +1,17 @@
+{
+  "name": "vss-workspace",
+  "version": "1.0.0",
+  "description": "VSS Workspace - Unified User Interface",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "amqplib": "^0.10.3",
+    "pg": "^8.16.3"
+  }
+}

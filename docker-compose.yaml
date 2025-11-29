@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  node:
+    build: .
+    container_name: vss-node
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${WEB_PORT:-8181}:8181"
+    volumes:
+      - ./:/usr/src/app
+    depends_on:
+      - asterisk
+    networks:
+      - vss_net
+
+  asterisk:
+    image: asterisk:18
+    container_name: vss-asterisk
+    restart: unless-stopped
+    volumes:
+      - ./asterisk/manager.conf:/etc/asterisk/manager.conf:ro
+      - ./asterisk/sip.conf:/etc/asterisk/sip.conf:ro
+      - ./asterisk:/etc/asterisk/custom:ro
+    ports:
+      - "5060:5060/udp"      # SIP UDP (for test)
+      - "5060:5060/tcp"
+      - "5038:5038/tcp"      # AMI port (exposed for server to connect locally)
+      - "10000-20000:10000-20000/udp"
+    networks:
+      - vss_net
+
+networks:
+  vss_net:
+    driver: bridge

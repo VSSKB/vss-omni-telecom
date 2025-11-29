@@ -1,0 +1,14 @@
+{
+  "rabbitmq": "amqp://rabbitmq:5672",
+  "role": "archon",
+  "instance_id": "archon-1",
+  "media": {
+    "webrtc": "webrtc:3478",
+    "iceServers": ["stun:webrtc:3478"]
+  },
+  "guacd": {
+    "host": "guacd",
+    "port": 4822
+  }
+}
+

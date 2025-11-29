@@ -1,0 +1,42 @@
+[Unit]
+Description=VSS Core Application Service
+After=network.target postgresql.service rabbitmq-server.service
+StartLimitIntervalSec=400
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=vss
+Group=vss
+WorkingDirectory=/opt/vss/services/workspace
+ExecStart=/usr/bin/node dist/main.js
+Restart=always
+RestartSec=5
+
+# Environment
+Environment=NODE_ENV=production
+EnvironmentFile=-/etc/vss/vss-core.env
+
+# Hardening
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ReadWritePaths=/opt/vss/logs /opt/vss/data
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vss-core
+
+[Install]
+WantedBy=multi-user.target
+

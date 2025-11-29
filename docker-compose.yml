@@ -6,15 +6,16 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "80:80" # Или любой другой порт, который ваше приложение слушает
+      - "3000:3000" # Порт для Node.js приложения
     volumes:
       - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock # Для доступа к Docker из контейнера
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
       - redis
-    command: sh -c "chmod +x /app/setup.sh && /app/setup.sh && gunicorn your_app_name.wsgi:application --bind 0.0.0.0:80" # <-- ЗАМЕНИТЕ ЭТО НА СВОЮ КОМАНДУ ЗАПУСКА
+    restart: unless-stopped
 
   redis:
     image: "redis:6-alpine"

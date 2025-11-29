@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>VSS DEMIURGE — UI</title>
+<style>
+body{margin:0;font-family:Inter,Segoe UI,Roboto,Arial;background:#050417;color:#dfe8ff}
+.container{display:flex;height:100vh}
+.left{width:360px;padding:18px;background:linear-gradient(180deg,#07102a,#030412);box-shadow:8px 0 40px rgba(0,0,0,0.8)}
+.right{flex:1;padding:18px;background:linear-gradient(180deg,#0b0f1f,#02030a)}
+h2{color:#00e0ff;margin:0 0 12px}
+.field{margin-bottom:10px}
+input,select,button{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);color:inherit}
+button.primary{background:linear-gradient(90deg,#7a2cff,#00e0ff);color:#001028;font-weight:700}
+.log{height:60vh;overflow:auto;background:rgba(255,255,255,0.01);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.02)}
+.badge{display:inline-block;padding:4px 8px;border-radius:10px;background:#06102a;color:#00e0ff;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="left">
+    <h2>VSS DEMIURGE UI</h2>
+    <div class="field"><input id="username" placeholder="username"></div>
+    <div class="field"><input id="password" type="password" placeholder="password"></div>
+    <div class="field"><button id="btnLogin" class="primary">Login</button></div>
+    <div class="field"><button id="btnRegister">Register</button></div>
+    <hr style="border:none;height:10px">
+    <div class="field"><input id="sipUri" placeholder="sip:user@domain"></div>
+    <div class="field"><button id="btnRegisterSip">Simulate SIP Register</button></div>
+    <div class="field"><button id="btnGetStatus">Get /status</button></div>
+  </div>
+  <div class="right">
+    <div style="display:flex;gap:10px;align-items:center">
+      <div class="badge" id="wsState">WS: disconnected</div>
+      <div class="badge" id="amiState">AMI: -</div>
+      <div class="badge" id="adbState">ADB: -</div>
+      <div style="margin-left:auto"><strong id="who">not authenticated</strong></div>
+    </div>
+
+    <h3>Events & Console</h3>
+    <div class="log" id="log"></div>
+
+    <h3>Actions</h3>
+    <div style="display:flex;gap:8px">
+      <button id="btnListDevices">Request ADB Devices</button>
+      <button id="btnOriginate">Origin. example</button>
+    </div>
+
+    <h3>AMI/ADB Response</h3>
+    <pre id="resp" style="background:rgba(255,255,255,0.01);padding:8px;border-radius:8px;height:220px;overflow:auto"></pre>
+  </div>
+</div>
+
+<script>
+let ws = null;
+let token = null;
+const logEl = document.getElementById('log');
+const respEl = document.getElementById('resp');
+const wsState = document.getElementById('wsState');
+const amiState = document.getElementById('amiState');
+const adbState = document.getElementById('adbState');
+const whoEl = document.getElementById('who');
+
+function log(msg, obj) {
+  const line = document.createElement('div');
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`; 
+  if (obj) {
+    const p = document.createElement('pre'); p.style.whiteSpace='pre-wrap'; p.textContent = JSON.stringify(obj,null,2);
+    line.appendChild(p);
+  }
+  logEl.prepend(line);
+}
+function setResp(o){ respEl.textContent = JSON.stringify(o,null,2); }
+
+document.getElementById('btnLogin').onclick = async ()=>{
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const r = await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+  const j = await r.json();
+  if (r.ok) {
+    token = j.token;
+    whoEl.textContent = j.username;
+    log('Login ok', j);
+    connectWs();
+  } else {
+    alert(j.error || j.message || 'login failed');
+  }
+};
+document.getElementById('btnRegister').onclick = async ()=>{
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const r = await fetch('/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+  const j = await r.json();
+  if (r.ok || r.status===201) {
+    token = j.token;
+    whoEl.textContent = j.username;
+    log('Registered', j);
+    connectWs();
+  } else {
+    alert(j.error || j.message || 'register failed');
+  }
+};
+
+function connectWs() {
+  if (!token) { alert('need token'); return; }
+  ws = new WebSocket((location.protocol==='https:'?'wss':'ws') + '://' + location.host);
+  ws.onopen = ()=> {
+    wsState.textContent = 'WS: connected';
+    log('WS open');
+    // send auth_jwt
+    ws.send(JSON.stringify({ type: 'auth_jwt', token }));
+  };
+  ws.onmessage = (ev)=> {
+    try {
+      const data = JSON.parse(ev.data);
+      if (data.type === 'auth_ok') {
+        log('Authenticated as '+data.username);
+      } else if (data.type === 'ami_status') {
+        amiState.textContent = 'AMI: ' + data.status;
+      } else if (data.type === 'adb_devices') {
+        adbState.textContent = 'ADB: ' + (data.devices ? data.devices.length : 0);
+      } else if (data.type === 'ami_event') {
+        log('AMI EVENT', data.event);
+      }
+      setResp(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+  ws.onclose = ()=> { wsState.textContent='WS: disconnected'; log('WS closed'); }
+  ws.onerror = (e)=> { log('WS error', e); }
+}
+
+document.getElementById('btnListDevices').onclick = ()=> {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return alert('connect ws');
+  // send ping for devices (server continuously pushes devices)
+  ws.send(JSON.stringify({ type: 'ping' }));
+};
+
+document.getElementById('btnOriginate').onclick = ()=> {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return alert('connect ws');
+  // example originate action for AMI (adapt as needed for your Asterisk)
+  const action = {
+    Action: 'Originate',
+    Channel: 'SIP/100', // adapt
+    Context: 'default',
+    Exten: '100',
+    Priority: 1,
+    CallerID: 'VSSDemo <100>'
+  };
+  ws.send(JSON.stringify({ type: 'ami_action', action }));
+};
+</script>
+</body>
+</html>

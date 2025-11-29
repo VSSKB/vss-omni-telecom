@@ -311,6 +311,7 @@ async function loadProjects() {
                     <div class="project-actions">
                         <button onclick="startProject(event, '${project.id}')" class="start-btn" ${project.status === 'running' ? 'disabled' : ''}>Старт</button>
                         <button onclick="stopProject(event, '${project.id}')" class="stop-btn" ${project.status === 'stopped' ? 'disabled' : ''}>Стоп</button>
+                        <button onclick="openTrunkDashboard(event, '${project.id}')" class="admin-btn" style="background: #9b59b6;">Управление транками</button>
                         <button onclick="openAdminPanel(event, '${project.id}', ${project.ports.nginx})" class="admin-btn">Перейти в админку</button>
                         <button onclick="viewProjectLogs(event, '${project.id}')" class="logs-btn">Просмотр логов</button>
                         <button onclick="deleteProject(event, '${project.id}')" class="button-danger">Удалить</button>
@@ -338,6 +339,8 @@ async function loadProjects() {
     }
 }
 
+let selectedProjectIdForSettings = null; // Для отслеживания выбранного проекта для настроек
+
 // Функция для выбора проекта для создания пользователя
 function selectProjectForUserCreation(projectId) {
     // Снимаем выделение со всех проектов
@@ -350,7 +353,9 @@ function selectProjectForUserCreation(projectId) {
     if (selectedItem) {
         selectedItem.classList.add('selected');
         selectedProjectIdForUserCreation = projectId;
+        selectedProjectIdForSettings = projectId; // Также выбираем для настроек
         document.getElementById('createUserButton').disabled = false; // Активируем кнопку
+        document.getElementById('openSettingsButton').disabled = false; // Активируем кнопку настроек
     }
 }
 
@@ -412,48 +417,355 @@ async function deleteProject(event, projectId) {
     }
 }
 
+// Функция для открытия интерфейса управления транками
+function openTrunkDashboard(event, projectId) {
+    event.stopPropagation();
+    window.location.href = `/project-trunk-dashboard.html?projectId=${projectId}`;
+}
+
 // Новые функции для кнопок
-function openAdminPanel(event, projectId, nginxPort) {
+async function openAdminPanel(event, projectId, nginxPort) {
     event.stopPropagation();
-    const adminUrl = `http://${window.location.hostname}:${nginxPort}`; // Предполагаем, что админка доступна по корневому URL проекта
-    window.open(adminUrl, '_blank');
-    alert(`Переход в админку проекта ${projectId} (на порт ${nginxPort}).`);
-    console.log(`Открытие админки для проекта ${projectId} по URL: ${adminUrl}`);
+    try {
+        // Получаем информацию о проекте для проверки статуса
+        const response = await fetch(`/api/projects/${projectId}/info`);
+        if (response.ok) {
+            const projectInfo = await response.json();
+            if (projectInfo.status !== 'running') {
+                if (!confirm('Проект не запущен. Запустить проект перед переходом в админку?')) {
+                    return;
+                }
+                // Запускаем проект
+                const startResponse = await fetch(`/api/projects/${projectId}/start`, { method: 'POST' });
+                if (!startResponse.ok) {
+                    alert('Не удалось запустить проект. Проверьте логи.');
+                    return;
+                }
+                // Ждем немного, чтобы контейнеры запустились
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+            // Формируем URL админки
+            const adminUrl = projectInfo.adminUrl || `http://${window.location.hostname}:${nginxPort}`;
+            
+            // Открываем страницу входа вместо прямого URL
+            const loginUrl = `/admin-login.html?projectId=${projectId}&adminUrl=${encodeURIComponent(adminUrl)}`;
+            window.open(loginUrl, '_blank');
+            console.log(`Открытие страницы входа для проекта ${projectId}, админка: ${adminUrl}`);
+        } else {
+            alert('Не удалось получить информацию о проекте.');
+        }
+    } catch (error) {
+        console.error('Ошибка при открытии админки:', error);
+        alert('Ошибка при открытии админки. Проверьте, что проект запущен.');
+    }
 }
 
-function viewProjectLogs(event, projectId) {
+async function viewProjectLogs(event, projectId) {
     event.stopPropagation();
-    alert(`Просмотр логов для проекта ${projectId}. (Функция не реализована на фронтенде, требует бэкенд-API)`);
-    console.log(`Запрос на просмотр логов для проекта ${projectId}.`);
-    // Пример: fetch(`/api/projects/${projectId}/logs`).then(...)
+    
+    try {
+        // Показываем индикатор загрузки
+        showLogsModal(projectId, 'Загрузка логов...', true);
+        
+        // Получаем информацию о проекте для списка сервисов
+        const infoResponse = await fetch(`/api/projects/${projectId}/info`);
+        let services = [];
+        if (infoResponse.ok) {
+            const projectInfo = await infoResponse.json();
+            services = projectInfo.services || [];
+        }
+        
+        // Получаем логи
+        const logsResponse = await fetch(`/api/projects/${projectId}/logs?tail=200`);
+        if (!logsResponse.ok) {
+            const error = await logsResponse.json();
+            showLogsModal(projectId, `Ошибка: ${error.message}`, false, services);
+            return;
+        }
+        
+        const logsData = await logsResponse.json();
+        showLogsModal(projectId, logsData.logs, false, services, projectId);
+    } catch (error) {
+        console.error('Ошибка при получении логов:', error);
+        showLogsModal(projectId, `Ошибка получения логов: ${error.message}`, false);
+    }
 }
 
-// Новая функция для загрузки Docker образа (интегрирована в Шаг 3)
+// Функция для отображения модального окна с логами
+function showLogsModal(projectId, logsContent, isLoading, services = [], projectIdForRefresh = null) {
+    // Удаляем существующее модальное окно, если есть
+    const existingModal = document.getElementById('logsModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Создаем модальное окно
+    const modal = document.createElement('div');
+    modal.id = 'logsModal';
+    modal.className = 'logs-modal';
+    // Экранирование projectId для безопасной вставки в HTML
+    const safeProjectId = escapeHtml(projectIdForRefresh || projectId);
+    const safeProjectIdAttr = safeProjectId.replace(/'/g, "\\'");
+    
+    // Экранирование имен сервисов для безопасной вставки в HTML
+    const safeServices = services.map(s => {
+        const safeService = escapeHtml(s);
+        const safeServiceAttr = safeService.replace(/"/g, '&quot;');
+        return `<option value="${safeServiceAttr}">${safeService}</option>`;
+    }).join('');
+    
+    modal.innerHTML = `
+        <div class="logs-modal-content">
+            <div class="logs-modal-header">
+                <h2>Логи проекта: ${safeProjectId}</h2>
+                <div class="logs-modal-controls">
+                    ${services.length > 0 ? `
+                        <select id="logsServiceSelect" onchange="loadServiceLogs('${safeProjectIdAttr}')">
+                            <option value="">Все сервисы</option>
+                            ${safeServices}
+                        </select>
+                    ` : ''}
+                    <button onclick="refreshLogs('${safeProjectIdAttr}')" class="refresh-logs-btn">Обновить</button>
+                    <button onclick="closeLogsModal()" class="close-logs-btn">&times;</button>
+                </div>
+            </div>
+            <div class="logs-modal-body">
+                <pre id="logsContent" class="logs-content">${isLoading ? 'Загрузка...' : escapeHtml(logsContent)}</pre>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Автопрокрутка вниз
+    if (!isLoading) {
+        const logsContentEl = document.getElementById('logsContent');
+        logsContentEl.scrollTop = logsContentEl.scrollHeight;
+    }
+}
+
+// Функция для закрытия модального окна
+function closeLogsModal() {
+    const modal = document.getElementById('logsModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Функция для обновления логов
+async function refreshLogs(projectId) {
+    // Проверяем, что модальное окно все еще открыто
+    const modal = document.getElementById('logsModal');
+    if (!modal) {
+        return; // Модальное окно закрыто, прекращаем выполнение
+    }
+    
+    const serviceSelect = document.getElementById('logsServiceSelect');
+    const service = serviceSelect ? serviceSelect.value : '';
+    
+    try {
+        const logsContentEl = document.getElementById('logsContent');
+        if (!logsContentEl) {
+            return; // Элемент не найден, возможно модальное окно закрыто
+        }
+        
+        logsContentEl.textContent = 'Загрузка...';
+        
+        const url = `/api/projects/${projectId}/logs?tail=200${service ? `&service=${encodeURIComponent(service)}` : ''}`;
+        const response = await fetch(url);
+        
+        // Проверяем еще раз, что элемент существует после асинхронной операции
+        const logsContentElAfter = document.getElementById('logsContent');
+        if (!logsContentElAfter) {
+            return; // Модальное окно было закрыто во время загрузки
+        }
+        
+        if (!response.ok) {
+            const error = await response.json();
+            logsContentElAfter.textContent = `Ошибка: ${error.message}`;
+            return;
+        }
+        
+        const logsData = await response.json();
+        logsContentElAfter.textContent = logsData.logs;
+        logsContentElAfter.scrollTop = logsContentElAfter.scrollHeight;
+    } catch (error) {
+        // Проверяем, что элемент все еще существует перед записью ошибки
+        const logsContentEl = document.getElementById('logsContent');
+        if (logsContentEl) {
+            logsContentEl.textContent = `Ошибка получения логов: ${error.message}`;
+        }
+    }
+}
+
+// Функция для загрузки логов конкретного сервиса
+async function loadServiceLogs(projectId) {
+    await refreshLogs(projectId);
+}
+
+// Вспомогательная функция для экранирования HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Закрытие модального окна при клике вне его
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('logsModal');
+    if (modal && event.target === modal) {
+        closeLogsModal();
+    }
+});
+
+// Функции для работы с Docker Hub
+async function checkDockerLoginStatus() {
+    try {
+        const response = await fetch('/api/docker-login-status');
+        const result = await response.json();
+        
+        const statusDiv = document.getElementById('dockerLoginStatus');
+        const loginForm = document.getElementById('dockerLoginForm');
+        const logoutForm = document.getElementById('dockerLogoutForm');
+        const loggedInUser = document.getElementById('dockerLoggedInUser');
+        
+        if (result.loggedIn) {
+            statusDiv.innerHTML = '<p style="color: green;">✅ Выполнен вход в Docker Hub</p>';
+            loginForm.style.display = 'none';
+            logoutForm.style.display = 'block';
+            if (result.config && result.config.username) {
+                loggedInUser.textContent = `Вошли как: ${result.config.username}${result.config.registry ? ` (${result.config.registry})` : ''}`;
+            } else {
+                loggedInUser.textContent = 'Вошли в Docker Hub';
+            }
+        } else {
+            statusDiv.innerHTML = '<p style="color: orange;">⚠️ Не выполнен вход в Docker Hub. Для приватных образов требуется авторизация.</p>';
+            loginForm.style.display = 'block';
+            logoutForm.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Ошибка проверки статуса Docker login:', error);
+        document.getElementById('dockerLoginStatus').innerHTML = '<p style="color: red;">Ошибка проверки статуса</p>';
+    }
+}
+
+async function dockerLogin() {
+    const username = document.getElementById('dockerUsername').value;
+    const password = document.getElementById('dockerPassword').value;
+    const registry = document.getElementById('dockerRegistry').value;
+    
+    if (!username || !password) {
+        alert('Пожалуйста, введите имя пользователя и пароль.');
+        return;
+    }
+    
+    try {
+        const statusDiv = document.getElementById('dockerLoginStatus');
+        statusDiv.innerHTML = '<p>Выполняется вход...</p>';
+        
+        const response = await fetch('/api/docker-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, registry: registry || undefined })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Успешный вход в Docker Hub!');
+            // Очищаем поля пароля
+            document.getElementById('dockerPassword').value = '';
+            // Обновляем статус
+            await checkDockerLoginStatus();
+        } else {
+            alert(`Ошибка входа: ${result.message}\n${result.details || ''}`);
+            statusDiv.innerHTML = `<p style="color: red;">Ошибка: ${result.message}</p>`;
+        }
+    } catch (error) {
+        console.error('Ошибка входа в Docker Hub:', error);
+        alert('Ошибка сети при попытке входа в Docker Hub.');
+    }
+}
+
+async function dockerLogout() {
+    if (!confirm('Вы уверены, что хотите выйти из Docker Hub?')) {
+        return;
+    }
+    
+    try {
+        const statusDiv = document.getElementById('dockerLoginStatus');
+        statusDiv.innerHTML = '<p>Выполняется выход...</p>';
+        
+        const response = await fetch('/api/docker-logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Успешный выход из Docker Hub');
+            await checkDockerLoginStatus();
+        } else {
+            alert(`Ошибка выхода: ${result.message}`);
+        }
+    } catch (error) {
+        console.error('Ошибка выхода из Docker Hub:', error);
+        alert('Ошибка сети при попытке выхода из Docker Hub.');
+    }
+}
+
+// Новая функция для загрузки Docker образа (интегрирована в Шаг 3) с поддержкой авторизации
 async function pullDockerImage() {
     const imageName = document.getElementById('dockerImageName').value;
     if (!imageName.trim()) {
         alert('Пожалуйста, введите имя Docker образа.');
         return;
     }
+    
     try {
+        const statusDiv = document.getElementById('dockerLoginStatus');
+        const originalStatus = statusDiv.innerHTML;
+        statusDiv.innerHTML = '<p>Загрузка образа...</p>';
+        
         const response = await fetch('/api/pull-docker-image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ imageName })
         });
+        
         const result = await response.json();
+        
         if (response.ok) {
-            alert(`Образ "${imageName}" успешно загружен.`);
-            document.getElementById('dockerImageName').value = ''; // Очищаем поле
+            alert(`Образ ${imageName} успешно загружен!`);
+            document.getElementById('dockerImageName').value = '';
+            statusDiv.innerHTML = originalStatus;
+        } else if (response.status === 401 || result.requiresAuth) {
+            // Требуется авторизация
+            const shouldLogin = confirm(`Для загрузки образа ${imageName} требуется авторизация в Docker Hub.\n\nВойти сейчас?`);
+            if (shouldLogin) {
+                document.getElementById('dockerLoginForm').style.display = 'block';
+                await checkDockerLoginStatus();
+            }
+            statusDiv.innerHTML = `<p style="color: orange;">⚠️ Требуется авторизация: ${result.message}</p>`;
         } else {
-            alert(`Ошибка загрузки образа: ${result.message || 'Неизвестная ошибка'}\nДетали: ${result.details || ''}`);
-            console.error('Ошибка загрузки образа:', result);
+            alert(`Ошибка загрузки образа: ${result.message}\n${result.details || ''}`);
+            statusDiv.innerHTML = originalStatus;
         }
     } catch (error) {
-        console.error('Ошибка запроса загрузки образа:', error);
+        console.error('Ошибка загрузки Docker образа:', error);
         alert('Ошибка сети при попытке загрузки образа.');
+        document.getElementById('dockerLoginStatus').innerHTML = '<p style="color: red;">Ошибка сети</p>';
     }
 }
+
+// Проверяем статус Docker login при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('dockerLoginStatus')) {
+        checkDockerLoginStatus();
+    }
+});
 
 // Новая функция для создания пользователя VSS (интегрирована в Шаг 3)
 async function createUser() {
@@ -489,5 +801,105 @@ async function createUser() {
     } catch (error) {
         console.error('Ошибка запроса создания пользователя:', error);
         alert('Ошибка сети при попытке создания пользователя.');
+    }
+}
+
+// Функции для работы с настройками проекта
+async function openProjectSettings() {
+    if (!selectedProjectIdForSettings) {
+        alert('Пожалуйста, выберите проект из списка.');
+        return;
+    }
+
+    try {
+        // Получаем информацию о проекте
+        const infoResponse = await fetch(`/api/projects/${selectedProjectIdForSettings}/info`);
+        if (!infoResponse.ok) {
+            throw new Error('Не удалось загрузить информацию о проекте');
+        }
+        const projectInfo = await infoResponse.json();
+        
+        // Получаем настройки проекта
+        const settingsResponse = await fetch(`/api/projects/${selectedProjectIdForSettings}/settings`);
+        if (!settingsResponse.ok) {
+            throw new Error('Не удалось загрузить настройки проекта');
+        }
+        const settings = await settingsResponse.json();
+
+        // Заполняем форму
+        document.getElementById('settingsProjectName').textContent = projectInfo.name;
+        document.getElementById('adbEnabled').checked = settings.adb?.enabled || false;
+        document.getElementById('adbPath').value = settings.adb?.path || (navigator.platform.includes('Win') ? 'adb.exe' : 'adb');
+        document.getElementById('adbPort').value = settings.adb?.port || 5037;
+        document.getElementById('adbAutoStart').checked = settings.adb?.autoStart || false;
+
+        // Показываем модальное окно
+        document.getElementById('projectSettingsModal').style.display = 'block';
+        document.getElementById('adbSettingsStatus').style.display = 'none';
+    } catch (error) {
+        console.error('Ошибка загрузки настроек проекта:', error);
+        alert(`Ошибка загрузки настроек: ${error.message}`);
+    }
+}
+
+function closeProjectSettings() {
+    document.getElementById('projectSettingsModal').style.display = 'none';
+}
+
+async function saveProjectSettings() {
+    if (!selectedProjectIdForSettings) {
+        alert('Проект не выбран.');
+        return;
+    }
+
+    const statusDiv = document.getElementById('adbSettingsStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.className = 'message-box';
+    statusDiv.innerHTML = '<p>Сохранение настроек...</p>';
+
+    try {
+        const adbSettings = {
+            enabled: document.getElementById('adbEnabled').checked,
+            path: document.getElementById('adbPath').value.trim(),
+            port: parseInt(document.getElementById('adbPort').value) || 5037,
+            autoStart: document.getElementById('adbAutoStart').checked
+        };
+
+        // Валидация
+        if (adbSettings.enabled && !adbSettings.path) {
+            throw new Error('Укажите путь к ADB');
+        }
+        if (adbSettings.port < 1024 || adbSettings.port > 65535) {
+            throw new Error('Порт должен быть в диапазоне 1024-65535');
+        }
+
+        const response = await fetch(`/api/projects/${selectedProjectIdForSettings}/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adb: adbSettings })
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+            statusDiv.className = 'message-box success';
+            statusDiv.innerHTML = '<p>✅ Настройки успешно сохранены!</p>';
+            setTimeout(() => {
+                closeProjectSettings();
+            }, 1500);
+        } else {
+            throw new Error(result.message || 'Ошибка сохранения настроек');
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения настроек:', error);
+        statusDiv.className = 'message-box error';
+        statusDiv.innerHTML = `<p>❌ Ошибка: ${error.message}</p>`;
+    }
+}
+
+// Закрытие модального окна при клике вне его
+window.onclick = function(event) {
+    const modal = document.getElementById('projectSettingsModal');
+    if (event.target === modal) {
+        closeProjectSettings();
     }
 }

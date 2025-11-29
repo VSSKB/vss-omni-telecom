@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "id": "f9558ebd-f78e-45e2-9521-2214af57cb90",
+    "name": "v01",
+    "path": "C:\\Users\\Administrator\\Documents\\vss-omni-telecom\\projects\\f9558ebd-f78e-45e2-9521-2214af57cb90",
+    "status": "running",
+    "ports": {
+      "nginx": 8090,
+      "backend": 44539,
+      "frontend": 46207,
+      "mikopbx": 53444,
+      "db": 54064,
+      "rabbitmq": 18381,
+      "rabbitmqMgmt": 27929
+    },
+    "includeMikopbx": true,
+    "includePostgres": true,
+    "db": {
+      "dbName": "vss_db_l3qi",
+      "dbUser": "user_ccf",
+      "dbPort": 54064
+    },
+    "settings": {
+      "adb": {
+        "enabled": false,
+        "path": "adb.exe",
+        "port": 5037,
+        "autoStart": false
+      }
+    }
+  }
+]

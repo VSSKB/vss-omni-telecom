@@ -23,6 +23,32 @@
             </div>
 
             <hr> <div class="card-content">
+                <h3>Docker Hub настройки</h3>
+                <div id="dockerLoginStatus" style="margin-bottom: 15px; padding: 10px; border-radius: 5px; background: #f0f0f0;">
+                    <p>Проверка статуса...</p>
+                </div>
+                <div id="dockerLoginForm" style="display: none;">
+                    <div class="form-group">
+                        <label for="dockerUsername">Имя пользователя Docker Hub:</label>
+                        <input type="text" id="dockerUsername" placeholder="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="dockerPassword">Пароль / Access Token:</label>
+                        <input type="password" id="dockerPassword" placeholder="password или token">
+                    </div>
+                    <div class="form-group">
+                        <label for="dockerRegistry">Registry (опционально):</label>
+                        <input type="text" id="dockerRegistry" placeholder="https://index.docker.io/v1/ (по умолчанию)">
+                    </div>
+                    <button onclick="dockerLogin()" class="button">Войти в Docker Hub</button>
+                </div>
+                <div id="dockerLogoutForm" style="display: none;">
+                    <p id="dockerLoggedInUser"></p>
+                    <button onclick="dockerLogout()" class="button-secondary">Выйти из Docker Hub</button>
+                </div>
+            </div>
+
+            <hr> <div class="card-content">
                 <h3>Загрузить Docker образ</h3>
                 <div class="form-group">
                     <label for="dockerImageName">Имя образа (например, nginx:latest):</label>
@@ -43,6 +69,49 @@
                     <input type="password" id="vssPassword" required>
                 </div>
                 <button id="createUserButton" disabled>Создать пользователя</button>
+            </div>
+
+            <hr> <div class="card-content">
+                <h3>Настройки проекта</h3>
+                <p>Выберите проект из списка выше, чтобы настроить его параметры.</p>
+                <button id="openSettingsButton" disabled onclick="openProjectSettings()">Открыть настройки проекта</button>
+            </div>
+        </div>
+
+        <!-- Модальное окно настроек проекта -->
+        <div id="projectSettingsModal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h2>Настройки проекта: <span id="settingsProjectName"></span></h2>
+                    <span class="close" onclick="closeProjectSettings()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <h3>Настройки ADB</h3>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="adbEnabled"> Включить ADB
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="adbPath">Путь к ADB:</label>
+                        <input type="text" id="adbPath" placeholder="adb или полный путь к adb.exe">
+                        <small>На Windows: adb.exe или полный путь (например, C:\platform-tools\adb.exe). На Linux/Mac: adb</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="adbPort">Порт ADB сервера:</label>
+                        <input type="number" id="adbPort" value="5037" min="1024" max="65535">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="adbAutoStart"> Автоматически запускать ADB сервер при старте
+                        </label>
+                    </div>
+                    <div id="adbSettingsStatus" class="message-box" style="margin-top: 10px; display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button onclick="saveProjectSettings()" class="button">Сохранить настройки</button>
+                    <button onclick="closeProjectSettings()" class="button-secondary">Отмена</button>
+                </div>
             </div>
         </div>
 

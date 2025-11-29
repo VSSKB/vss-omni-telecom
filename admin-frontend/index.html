@@ -213,6 +213,36 @@
                 </div>
             </div>
         </div>
+
+        <!-- Секция Настроек AMI -->
+        <div id="ami-settings-section" class="section hidden">
+            <div class="section-title">Настройки AMI (Asterisk Manager Interface)</div>
+            <div class="flex flex-col gap-4">
+                <div>
+                    <label for="ami-host" class="block text-sm font-medium text-gray-700">IP-адрес или хост:</label>
+                    <input type="text" id="ami-host" class="input-field mt-1" placeholder="213.165.48.17">
+                </div>
+                <div>
+                    <label for="ami-port" class="block text-sm font-medium text-gray-700">Порт:</label>
+                    <input type="number" id="ami-port" class="input-field mt-1" placeholder="6038" min="1" max="65535">
+                </div>
+                <div>
+                    <label for="ami-username" class="block text-sm font-medium text-gray-700">Имя пользователя:</label>
+                    <input type="text" id="ami-username" class="input-field mt-1" placeholder="vss_1">
+                </div>
+                <div>
+                    <label for="ami-password" class="block text-sm font-medium text-gray-700">Пароль:</label>
+                    <input type="password" id="ami-password" class="input-field mt-1" placeholder="Введите пароль AMI">
+                </div>
+                <div class="flex-row">
+                    <button id="save-ami-settings-btn" class="btn btn-primary">Сохранить и применить</button>
+                    <button id="load-ami-settings-btn" class="btn btn-secondary">Загрузить текущие</button>
+                </div>
+                <div id="ami-settings-status" class="message-box mt-4 hidden">
+                    <p>Статус настроек:</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -250,6 +280,15 @@
         const adbHangupBtn = document.getElementById('adb-hangup-btn');
         const adbResponseDiv = document.getElementById('adb-response');
 
+        const amiSettingsSection = document.getElementById('ami-settings-section');
+        const amiHostInput = document.getElementById('ami-host');
+        const amiPortInput = document.getElementById('ami-port');
+        const amiUsernameInput = document.getElementById('ami-username');
+        const amiPasswordInput = document.getElementById('ami-password');
+        const saveAmiSettingsBtn = document.getElementById('save-ami-settings-btn');
+        const loadAmiSettingsBtn = document.getElementById('load-ami-settings-btn');
+        const amiSettingsStatusDiv = document.getElementById('ami-settings-status');
+
         let ws;
         let authToken = localStorage.getItem('adminAuthToken'); // Пытаемся получить токен из localStorage
 
@@ -273,7 +312,85 @@
             amiControlSection.classList.add('hidden');
             conferenceControlSection.classList.add('hidden');
             adbControlSection.classList.add('hidden');
+            amiSettingsSection.classList.add('hidden');
         }
+
+        // --- Функции для работы с настройками AMI ---
+        async function loadAmiSettings() {
+            try {
+                const response = await fetch(`${backendUrl}/api/config/ami`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    amiHostInput.value = data.config.host || '';
+                    amiPortInput.value = data.config.port || '';
+                    amiUsernameInput.value = data.config.username || '';
+                    // Пароль не загружаем из соображений безопасности
+                    amiPasswordInput.value = '';
+                    showMessage(amiSettingsStatusDiv, 'Настройки загружены', 'success');
+                } else {
+                    showMessage(amiSettingsStatusDiv, `Ошибка загрузки настроек: ${data.message || 'Неизвестная ошибка'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки настроек AMI:', error);
+                showMessage(amiSettingsStatusDiv, `Ошибка загрузки настроек: ${error.message}`, 'error');
+            }
+        }
+
+        async function saveAmiSettings() {
+            const host = amiHostInput.value.trim();
+            const port = amiPortInput.value.trim();
+            const username = amiUsernameInput.value.trim();
+            const password = amiPasswordInput.value.trim();
+
+            if (!host || !port || !username || !password) {
+                showMessage(amiSettingsStatusDiv, 'Все поля обязательны для заполнения', 'error');
+                return;
+            }
+
+            if (isNaN(port) || parseInt(port) < 1 || parseInt(port) > 65535) {
+                showMessage(amiSettingsStatusDiv, 'Порт должен быть числом от 1 до 65535', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${backendUrl}/api/config/ami`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        host,
+                        port: parseInt(port),
+                        username,
+                        password
+                    })
+                });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showMessage(amiSettingsStatusDiv, 'Настройки сохранены и применены. Переподключение к AMI...', 'success');
+                    // Очищаем поле пароля после сохранения
+                    amiPasswordInput.value = '';
+                } else {
+                    showMessage(amiSettingsStatusDiv, `Ошибка сохранения настроек: ${data.message || 'Неизвестная ошибка'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Ошибка сохранения настроек AMI:', error);
+                showMessage(amiSettingsStatusDiv, `Ошибка сохранения настроек: ${error.message}`, 'error');
+            }
+        }
+
+        // Обработчики событий для настроек AMI
+        saveAmiSettingsBtn.addEventListener('click', saveAmiSettings);
+        loadAmiSettingsBtn.addEventListener('click', loadAmiSettings);
 
         function showAdminPanel() {
             authSection.classList.add('hidden');
@@ -281,6 +398,8 @@
             amiControlSection.classList.remove('hidden');
             conferenceControlSection.classList.remove('hidden');
             adbControlSection.classList.remove('hidden');
+            amiSettingsSection.classList.remove('hidden');
+            loadAmiSettings(); // Загружаем настройки при показе панели
         }
 
         function showAuthSection() {

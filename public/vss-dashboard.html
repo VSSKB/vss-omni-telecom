@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSS DEMIURGE WEB CONTROL</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script src="/vss-dashboard-enhanced.js"></script>
+    <style>
+        :root {
+            --vss-primary: #3498db;
+            --vss-primary-dark: #2980b9;
+            --vss-secondary: #2c3e50;
+            --vss-accent: #e74c3c;
+            --vss-success: #27ae60;
+            --vss-warning: #f39c12;
+            --vss-danger: #e74c3c;
+            --vss-dark: #1a1a1a;
+            --vss-dark-blue: #0d1421;
+            --vss-light: #ecf0f1;
+            --vss-blue: #3498db;
+            --vss-green: #2ecc71;
+            --vss-purple: #9b59b6;
+            --vss-red: #e74c3c;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        body {
+            background: var(--vss-dark-blue);
+            color: var(--vss-light);
+            min-height: 100vh;
+            display: flex;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.3);
+            position: fixed;
+            left: 0;
+            top: 0;
+            overflow-y: auto;
+        }
+        
+        .logo-container {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .logo-dragon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .logo-text {
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+            line-height: 1.2;
+        }
+        
+        .logo-text .vss {
+            font-size: 24px;
+        }
+        
+        .logo-text .demiurge {
+            font-size: 16px;
+        }
+        
+        .logo-text .web-control {
+            font-size: 12px;
+            color: #95a5a6;
+        }
+        
+        .nav-menu {
+            padding: 0 10px;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            color: #bdc3c7;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-bottom: 5px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: rgba(52, 152, 219, 0.1);
+            color: white;
+        }
+        
+        .nav-item.active {
+            background: var(--vss-blue);
+            color: white;
+        }
+        
+        .nav-item i {
+            margin-right: 10px;
+            width: 20px;
+        }
+        
+        .nav-arrow {
+            margin-left: auto;
+            font-size: 12px;
+        }
+        
+        /* Main Content */
+        .main-content {
+            margin-left: 250px;
+            flex: 1;
+            padding: 30px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .header-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: white;
+        }
+        
+        .header-subtitle {
+            font-size: 14px;
+            color: #95a5a6;
+            margin-top: 5px;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--vss-blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .user-name {
+            color: white;
+            font-weight: 500;
+        }
+        
+        /* Metric Cards */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-radius: 12px;
+            padding: 25px;
+            border: 2px solid;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: currentColor;
+        }
+        
+        .metric-card.blue {
+            border-color: var(--vss-blue);
+            color: var(--vss-blue);
+        }
+        
+        .metric-card.green {
+            border-color: var(--vss-green);
+            color: var(--vss-green);
+        }
+        
+        .metric-card.purple {
+            border-color: var(--vss-purple);
+            color: var(--vss-purple);
+        }
+        
+        .metric-card.red {
+            border-color: var(--vss-red);
+            color: var(--vss-red);
+        }
+        
+        .metric-title {
+            font-size: 14px;
+            color: #95a5a6;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .metric-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: white;
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            margin-top: 30px;
+        }
+        
+        .quick-actions-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 20px;
+        }
+        
+        .actions-buttons {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .action-btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-size: 14px;
+        }
+        
+        .action-btn.primary {
+            background: var(--vss-blue);
+            color: white;
+        }
+        
+        .action-btn.primary:hover {
+            background: var(--vss-primary-dark);
+            transform: translateY(-2px);
+        }
+        
+        .action-btn.outline {
+            background: transparent;
+            border: 2px solid var(--vss-blue);
+            color: var(--vss-blue);
+        }
+        
+        .action-btn.outline:hover {
+            background: rgba(52, 152, 219, 0.1);
+        }
+        
+        @media (max-width: 1024px) {
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="logo-container">
+            <div class="logo-dragon">🐉</div>
+            <div class="logo-text">
+                <div class="vss">VSS</div>
+                <div class="demiurge">DEMIURGE</div>
+                <div class="web-control">WEB CONTROL</div>
+            </div>
+        </div>
+        
+        <nav class="nav-menu">
+            <div class="nav-item" onclick="scrollToTop()">
+                <i>▲</i>
+                <span>Наверх</span>
+            </div>
+            <a class="nav-item" data-page="dashboard" onclick="window.vssUI.switchPage('dashboard')">
+                <i>🏠</i>
+                <span>Dashboard</span>
+            </a>
+            <a class="nav-item active" data-page="hosts" onclick="window.vssUI.switchPage('hosts')">
+                <i>📞</i>
+                <span>Hosts</span>
+                <span class="nav-arrow">▼</span>
+            </a>
+            <a class="nav-item" data-page="calls" onclick="window.vssUI.switchPage('calls')">
+                <i>📞</i>
+                <span>Calls</span>
+            </a>
+            <a class="nav-item" id="nav-archonts" data-page="archonts" onclick="window.vssUI.switchPage('archonts')" style="display: none;">
+                <i>🏛️</i>
+                <span>ARCHONTs</span>
+            </a>
+            <a class="nav-item" data-page="settings" onclick="window.vssUI.switchPage('settings')">
+                <i>⚙️</i>
+                <span>Settings</span>
+            </a>
+            <a class="nav-item" onclick="window.vssUI.logout()">
+                <i>✕</i>
+                <span>Logout</span>
+            </a>
+        </nav>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="header">
+            <div>
+                <h1 class="header-title">Обзор Систем VSS Auto</h1>
+                <p class="header-subtitle">Мониторинг в реальном времени (Real-Time)</p>
+            </div>
+            <div class="user-profile">
+                <div class="user-avatar">A</div>
+                <div class="user-name">Admin</div>
+            </div>
+        </div>
+        
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+            <div class="metric-card blue">
+                <div class="metric-title">Всего Хостов</div>
+                <div class="metric-value" id="metric-total-hosts">10</div>
+            </div>
+            <div class="metric-card green">
+                <div class="metric-title">Онлайн Хостов</div>
+                <div class="metric-value" id="metric-online-hosts">24</div>
+            </div>
+            <div class="metric-card purple">
+                <div class="metric-title">Всего Слотов (Линий)</div>
+                <div class="metric-value" id="metric-total-slots">18</div>
+            </div>
+            <div class="metric-card green">
+                <div class="metric-title">Онлайн Хостов</div>
+                <div class="metric-value" id="metric-online-hosts-2">24</div>
+            </div>
+            <div class="metric-card purple">
+                <div class="metric-title">Свободные Слоты</div>
+                <div class="metric-value" id="metric-free-slots">2</div>
+            </div>
+            <div class="metric-card red">
+                <div class="metric-title">Активных Звонков</div>
+                <div class="metric-value" id="metric-active-calls">5</div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <h2 class="quick-actions-title">Быстрые Действия</h2>
+            <div class="actions-buttons">
+                <button class="action-btn primary" onclick="window.vssUI.switchPage('hosts')">
+                    Перейти к Управлению Хостами
+                </button>
+                <button class="action-btn outline" onclick="window.vssUI.switchPage('calls')">
+                    Журнал Звонков
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // VSS UI Controller
+        class VSSDemiurgeUI {
+            constructor() {
+                this.apiBase = {
+                    ottb: 'http://localhost:8083',
+                    dci: 'http://localhost:8082',
+                    point: 'http://localhost:8081',
+                    workspace: 'http://localhost:3000'
+                };
+                this.authToken = null;
+                this.currentPage = 'dashboard';
+                this.wsConnection = null;
+                this.init();
+            }
+            
+            async init() {
+                this.authToken = localStorage.getItem('vss_auth_token');
+                this.userRole = localStorage.getItem('vss_user_role') || 'viewer';
+                this.archontTemplates = [];
+                
+                // Show ARCHONTs menu item only for admins
+                if (this.userRole === 'admin') {
+                    const archontsNav = document.getElementById('nav-archonts');
+                    if (archontsNav) {
+                        archontsNav.style.display = 'flex';
+                    }
+                }
+                
+                this.connectWebSocket();
+                await this.loadMetrics();
+                this.startAutoRefresh();
+            }
+            
+            connectWebSocket() {
+                try {
+                    this.wsConnection = io(this.apiBase.workspace, {
+                        transports: ['websocket'],
+                        reconnection: true
+                    });
+                    
+                    this.wsConnection.on('connect', () => {
+                        console.log('WebSocket connected');
+                    });
+                    
+                    this.wsConnection.on('slot.update', (data) => {
+                        this.loadMetrics();
+                    });
+                    
+                    this.wsConnection.on('call.update', (data) => {
+                        this.loadMetrics();
+                    });
+                } catch (error) {
+                    console.error('WebSocket connection error:', error);
+                }
+            }
+            
+            async loadMetrics() {
+                try {
+                    // Load slots
+                    const slotsResponse = await fetch(`${this.apiBase.ottb}/api/slots`);
+                    if (slotsResponse.ok) {
+                        const slots = await slotsResponse.json();
+                        const totalSlots = slots.length;
+                        const freeSlots = slots.filter(s => s.status === 'FREE').length;
+                        const busySlots = slots.filter(s => s.status === 'BUSY').length;
+                        
+                        document.getElementById('metric-total-slots').textContent = totalSlots;
+                        document.getElementById('metric-free-slots').textContent = freeSlots;
+                    }
+                    
+                    // Load calls
+                    const callsResponse = await fetch(`${this.apiBase.ottb}/api/calls/feed`);
+                    if (callsResponse.ok) {
+                        const calls = await callsResponse.json();
+                        document.getElementById('metric-active-calls').textContent = calls.length;
+                    }
+                    
+                    // Load trunks (hosts)
+                    const trunksResponse = await fetch(`${this.apiBase.ottb}/api/pbx/status`);
+                    if (trunksResponse.ok) {
+                        const data = await trunksResponse.json();
+                        const trunks = data.trunks || [];
+                        const totalHosts = trunks.length;
+                        const onlineHosts = trunks.filter(t => t.state === 'OK').length;
+                        
+                        document.getElementById('metric-total-hosts').textContent = totalHosts;
+                        document.getElementById('metric-online-hosts').textContent = onlineHosts;
+                        document.getElementById('metric-online-hosts-2').textContent = onlineHosts;
+                    }
+                } catch (error) {
+                    console.error('Error loading metrics:', error);
+                }
+            }
+            
+            startAutoRefresh() {
+                setInterval(() => {
+                    this.loadMetrics();
+                }, 5000); // Refresh every 5 seconds
+            }
+            
+            switchPage(page) {
+                this.currentPage = page;
+                
+                // Update nav items
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
+                
+                // Load page-specific content
+                if (page === 'archonts') {
+                    this.loadArchontsPage();
+                } else if (page === 'hosts') {
+                    this.loadHostsPage();
+                } else if (page === 'calls') {
+                    this.loadCallsPage();
+                }
+                
+                console.log('Switched to page:', page);
+            }
+            
+            async loadArchontsPage() {
+                try {
+                    // Check if user is admin
+                    const userRole = localStorage.getItem('vss_user_role') || 'viewer';
+                    if (userRole !== 'admin') {
+                        alert('Доступ запрещен. Требуется роль администратора.');
+                        return;
+                    }
+                    
+                    // Load centers
+                    const centersResponse = await fetch(`${this.apiBase.workspace}/api/archonts/centers`);
+                    if (centersResponse.ok) {
+                        const centers = await centersResponse.json();
+                        this.renderArchontsPage(centers);
+                    }
+                    
+                    // Load templates
+                    const templatesResponse = await fetch(`${this.apiBase.workspace}/api/archonts/templates`);
+                    if (templatesResponse.ok) {
+                        const templates = await templatesResponse.json();
+                        this.archontTemplates = templates;
+                    }
+                } catch (error) {
+                    console.error('Error loading ARCHONTs page:', error);
+                }
+            }
+            
+            renderArchontsPage(centers) {
+                const mainContent = document.querySelector('.main-content');
+                mainContent.innerHTML = `
+                    <div class="header">
+                        <div>
+                            <h1 class="header-title">ARCHONTs - Управление Call-Центрами</h1>
+                            <p class="header-subtitle">Развертывание облачных call-центров</p>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 30px;">
+                        <button class="action-btn primary" onclick="window.vssUI.showDeployCenterModal()">
+                            🚀 Deploy New Center
+                        </button>
+                    </div>
+                    
+                    <div id="archonts-centers-list">
+                        ${centers.map(center => `
+                            <div class="metric-card" style="margin-bottom: 20px; padding: 20px;">
+                                <h3 style="color: white; margin-bottom: 10px;">${center.name}</h3>
+                                <p style="color: #95a5a6; margin-bottom: 5px;">Статус: <span style="color: ${center.status === 'active' ? 'var(--vss-green)' : 'var(--vss-warning)'}">${center.status}</span></p>
+                                <p style="color: #95a5a6; margin-bottom: 5px;">Шаблон: ${center.template_name || 'N/A'}</p>
+                                <p style="color: #95a5a6; margin-bottom: 5px;">Транков: ${center.trunks_count || 0}</p>
+                                <p style="color: #95a5a6; margin-bottom: 10px;">Слотов: ${center.slots_count || 0}</p>
+                                <button class="action-btn outline" onclick="window.vssUI.manageCenter('${center.id}')">
+                                    Управление
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            showDeployCenterModal() {
+                const modal = document.createElement('div');
+                modal.id = 'deploy-center-modal';
+                modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center;';
+                modal.innerHTML = `
+                    <div style="background: var(--vss-dark-blue); padding: 30px; border-radius: 12px; max-width: 500px; width: 90%;">
+                        <h2 style="color: white; margin-bottom: 20px;">Развертывание нового Call-Центра</h2>
+                        <input type="text" id="center-name-input" placeholder="Название центра" style="width: 100%; padding: 10px; margin-bottom: 15px; background: #1e293b; border: 1px solid #34495e; border-radius: 6px; color: white;">
+                        <select id="center-template-select" style="width: 100%; padding: 10px; margin-bottom: 15px; background: #1e293b; border: 1px solid #34495e; border-radius: 6px; color: white;">
+                            ${(this.archontTemplates || []).map(t => `<option value="${t.id}">${t.name} - ${t.description}</option>`).join('')}
+                        </select>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="action-btn primary" onclick="window.vssUI.deployCenter()" style="flex: 1;">
+                                Развернуть
+                            </button>
+                            <button class="action-btn outline" onclick="document.getElementById('deploy-center-modal').remove()" style="flex: 1;">
+                                Отмена
+                            </button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            async deployCenter() {
+                try {
+                    const name = document.getElementById('center-name-input').value;
+                    const templateId = parseInt(document.getElementById('center-template-select').value);
+                    
+                    if (!name || !templateId) {
+                        alert('Заполните все поля');
+                        return;
+                    }
+                    
+                    const response = await fetch(`${this.apiBase.workspace}/api/archonts/centers`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: name,
+                            template_id: templateId,
+                            created_by: localStorage.getItem('vss_user_id')
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        document.getElementById('deploy-center-modal').remove();
+                        this.loadArchontsPage();
+                    } else {
+                        const error = await response.json();
+                        alert('Ошибка: ' + (error.message || 'Неизвестная ошибка'));
+                    }
+                } catch (error) {
+                    console.error('Error deploying center:', error);
+                    alert('Ошибка развертывания центра');
+                }
+            }
+            
+            manageCenter(centerId) {
+                alert('Управление центром ' + centerId + ' (функционал в разработке)');
+            }
+            
+            async loadHostsPage() {
+                // Load hosts/slots page
+                console.log('Loading hosts page');
+            }
+            
+            async loadCallsPage() {
+                // Load calls page
+                console.log('Loading calls page');
+            }
+            
+            logout() {
+                localStorage.removeItem('vss_auth_token');
+                window.location.href = '/';
+            }
+        }
+        
+        function scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        // Initialize UI - используем enhanced версию, если она загружена
+        // Иначе используем базовую версию
+        if (typeof VSSEnhancedUI !== 'undefined') {
+            // Enhanced UI будет инициализирован автоматически в vss-dashboard-enhanced.js
+            console.log('[VSS] Using enhanced UI');
+        } else {
+            // Fallback на базовую версию
+            window.vssUI = new VSSDemiurgeUI();
+            console.log('[VSS] Using basic UI');
+        }
+        
+        // Mobile menu toggle
+        if (window.innerWidth <= 768) {
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.sidebar') && !e.target.closest('.menu-toggle')) {
+                    document.getElementById('sidebar').classList.remove('open');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

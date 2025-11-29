@@ -1,0 +1,14 @@
+{
+  "rabbitmq": "amqp://rabbitmq:5672",
+  "role": "demiurge",
+  "policy": {
+    "max_sessions": 50,
+    "archon_autosize": true,
+    "audit_logging": true
+  },
+  "entities": {
+    "operator_roles": ["operator", "supervisor"],
+    "system_roles": ["demiurge", "root"]
+  }
+}
+

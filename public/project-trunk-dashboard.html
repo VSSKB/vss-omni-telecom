@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSS OTTB - Центр управления транками</title>
+    <style>
+        :root {
+            --hub-color: #2c3e50;
+            --trunk-online: #27ae60;
+            --trunk-offline: #e74c3c;
+            --trunk-warning: #f39c12;
+            --trunk-busy: #e67e22;
+            --active-call: #9b59b6;
+            --cli-color: #34495e;
+            --guacamole-color: #16a085;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            background: #1a1a1a;
+            color: #ecf0f1;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        /* Мобильный заголовок */
+        .mobile-header {
+            background: var(--hub-color);
+            padding: 15px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid #34495e;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .mobile-menu-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            background: var(--hub-color);
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #34495e;
+            width: 100%;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            z-index: 99;
+            padding-top: 70px;
+        }
+        
+        .sidebar.mobile-visible {
+            transform: translateX(0);
+        }
+        
+        .main-content {
+            padding: 15px;
+            overflow-y: auto;
+            width: 100%;
+        }
+        
+        .header {
+            background: var(--hub-color);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .dashboard {
+            background: var(--hub-color);
+            border-radius: 10px;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .panel {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .trunk-panel {
+            background: linear-gradient(135deg, #2980b9, #2c3e50);
+            border-left: 4px solid #e67e22;
+        }
+        
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 16px;
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        
+        .btn:active {
+            transform: scale(0.98);
+            background: #2980b9;
+        }
+        
+        .btn-sm { 
+            padding: 10px 14px; 
+            font-size: 14px; 
+            min-height: 40px;
+        }
+        
+        .btn-danger { background: #e74c3c; }
+        .btn-success { background: #27ae60; }
+        .btn-warning { background: #f39c12; }
+        .btn-call { background: #9b59b6; }
+        .btn-busy { background: #e67e22; }
+        .btn-cli { background: var(--cli-color); }
+        .btn-guacamole { background: var(--guacamole-color); }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .online { background: var(--trunk-online); }
+        .offline { background: var(--trunk-offline); }
+        .warning { background: var(--trunk-warning); }
+        .busy { background: var(--trunk-busy); }
+        .active-call { background: var(--active-call); animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .trunk-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .trunk-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+            transition: all 0.3s ease;
+        }
+        
+        .trunk-card:active {
+            transform: scale(0.98);
+        }
+        
+        .trunk-card.online {
+            border-left-color: var(--trunk-online);
+        }
+        
+        .trunk-card.offline {
+            border-left-color: var(--trunk-offline);
+        }
+        
+        .trunk-card.warning {
+            border-left-color: var(--trunk-warning);
+        }
+        
+        .trunk-card.busy {
+            border-left-color: var(--trunk-busy);
+        }
+        
+        .slot-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin: 10px 0;
+        }
+        
+        .slot {
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+            padding: 12px 8px;
+            text-align: center;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        
+        .slot:active {
+            transform: scale(0.95);
+        }
+        
+        .slot.active { border: 2px solid var(--trunk-online); }
+        .slot.inactive { border: 2px solid var(--trunk-offline); }
+        .slot.warning { border: 2px solid var(--trunk-warning); }
+        .slot.busy { border: 2px solid var(--trunk-busy); }
+        
+        .slot-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #e74c3c;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .call-item {
+            background: rgba(155, 89, 182, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+            border-left: 4px solid var(--active-call);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        
+        .modal-content {
+            position: relative;
+            background: var(--hub-color);
+            padding: 20px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+        
+        .access-modal {
+            max-width: 600px;
+        }
+        
+        .access-options {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .access-option {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .access-option:active {
+            transform: scale(0.98);
+            border-color: #3498db;
+        }
+        
+        .access-option.cli {
+            background: var(--cli-color);
+        }
+        
+        .access-option.guacamole {
+            background: var(--guacamole-color);
+        }
+        
+        .access-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #34495e;
+            background: #2c3e50;
+            color: white;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        .tailscale-status {
+            background: #16a085;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .stat-card {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #3498db;
+            margin: 5px 0;
+        }
+        
+        .trunk-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .call-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .trunk-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        
+        .trunk-info-item {
+            background: rgba(0,0,0,0.2);
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .terminal-window {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        
+        .terminal-line {
+            margin-bottom: 5px;
+            word-break: break-all;
+        }
+        
+        .terminal-prompt {
+            color: #27ae60;
+        }
+        
+        .terminal-command {
+            color: #3498db;
+        }
+        
+        .guacamole-frame {
+            width: 100%;
+            height: 400px;
+            background: #2c3e50;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 15px;
+            border: 2px dashed #7f8c8d;
+        }
+        
+        /* War Room Styles */
+        .war-room {
+            background: #1c1c1c;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .war-room-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .war-room-metrics {
+            margin-top: 10px;
+            font-size: 14px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        .war-room-guac {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 14px;
+            border-radius: 4px;
+        }
+        
+        .war-room-pre {
+            background: #111;
+            color: #0f0;
+            padding: 10px;
+            overflow-x: auto;
+            max-height: 150px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .war-room-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .war-room-slot {
+            background: #1c1c1c;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .war-room-slot.green { border-left: 4px solid #00ff00; }
+        .war-room-slot.yellow { border-left: 4px solid #ffff00; }
+        .war-room-slot.red { border-left: 4px solid #ff4444; }
+        
+        /* Адаптация для планшетов */
+        @media (min-width: 768px) {
+            .trunk-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .access-options {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .war-room-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        /* Адаптация для десктопов */
+        @media (min-width: 1024px) {
+            .container {
+                flex-direction: row;
+            }
+            
+            .sidebar {
+                width: 320px;
+                position: relative;
+                transform: translateX(0);
+                height: auto;
+                padding-top: 20px;
+            }
+            
+            .main-content {
+                flex: 1;
+                padding: 20px;
+            }
+            
+            .mobile-header {
+                display: none;
+            }
+            
+            .trunk-grid {
+                grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            }
+            
+            .war-room-container {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="mobile-header">
+        <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+        <h2>VSS AUTO HUB</h2>
+        <div style="width: 44px;"></div>
+    </div>
+    
+    <div class="container">
+        <div class="sidebar" id="sidebar">
+            <h2>VSS AUTO HUB</h2>
+            
+            <div class="panel trunk-panel">
+                <h4>TRUNK VSS AUTO HUB</h4>
+                <p><span class="status-indicator online"></span> Hub: Активен</p>
+                <p><span class="status-indicator online"></span> Tailscale: Подключен</p>
+                <p>Активных транков: <span id="activeTrunksCount">2/3</span></p>
+                <p>Всего слотов: <span id="totalSlots">24/30</span></p>
+                
+                <div style="margin: 15px 0;">
+                    <h5>Быстрые действия</h5>
+                    <button class="btn btn-success btn-sm" onclick="showAddTrunkModal()">Добавить транк</button>
+                    <button class="btn btn-sm" onclick="scanNetwork()">Сканировать сеть</button>
+                    <button class="btn btn-warning btn-sm" onclick="restartAll()">Перезапуск всех</button>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div>CPU</div>
+                        <div class="stat-value" id="cpuUsage">25%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>RAM</div>
+                        <div class="stat-value" id="ramUsage">1.7/4GB</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>Сеть</div>
+                        <div class="stat-value" id="networkUsage">115 Mbps</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>Звонки</div>
+                        <div class="stat-value" id="activeCallsCount">2</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h4>Быстрый вызов</h4>
+                <div class="form-group">
+                    <input type="text" id="quickCallNumber" placeholder="Номер для звонка" style="margin-bottom: 10px;">
+                    <select id="quickCallTrunk" style="margin-bottom: 10px;">
+                    </select>
+                    <button class="btn btn-call btn-sm" onclick="makeQuickCall()">Совершить звонок</button>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h4>Статистика звонков</h4>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div>Сегодня</div>
+                        <div class="stat-value">8</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>Неделя</div>
+                        <div class="stat-value">42</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>Успешные</div>
+                        <div class="stat-value">38</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>Пропущенные</div>
+                        <div class="stat-value">4</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="header">
+                <div class="header-top">
+                    <h1>Центр управления транками VSS AUTO HUB</h1>
+                    <div class="header-actions">
+                        <span class="tailscale-status">Tailscale: hub-vss-auto</span>
+                        <button class="btn" onclick="showNetworkConfig()">Сетевые настройки</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="dashboard">
+                <div>
+                    <div class="panel">
+                        <div class="trunk-header">
+                            <h3>Управление транками (Audio-host)</h3>
+                            <button class="btn btn-success btn-sm" onclick="showAddTrunkModal()">Добавить транк</button>
+                        </div>
+                        <div class="trunk-grid" id="trunkGrid">
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="panel">
+                        <h3>Активные звонки <span class="status-indicator active-call"></span></h3>
+                        <div id="activeCallsList">
+                        </div>
+                        <div style="text-align: center; margin-top: 10px;">
+                            <button class="btn btn-sm" onclick="refreshCalls()">Обновить</button>
+                            <button class="btn btn-danger btn-sm" onclick="endAllCalls()">Завершить все</button>
+                        </div>
+                    </div>
+                    
+                    <div class="panel">
+                        <h3>Системные логи</h3>
+                        <div style="background: black; padding: 10px; border-radius: 5px; height: 200px; overflow-y: scroll; font-family: monospace; font-size: 12px;" id="systemLogs">
+                            <div>[12:45:01] Транк "garage-01" подключен через Tailscale</div>
+                            <div>[12:45:02] Слот 3 на garage-01: восстановлено питание</div>
+                            <div>[12:45:05] Новый транк обнаружен: showroom-02</div>
+                            <div>[12:45:10] Начат мониторинг video-потока с slot-7</div>
+                        </div>
+                        <button class="btn btn-sm" onclick="clearLogs()" style="margin-top: 10px;">Очистить логи</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="addTrunkModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal('addTrunkModal')">×</button>
+            <h3>Добавить новый транк (Audio-host)</h3>
+            <div class="form-group">
+                <label>Tailscale ID / IP адрес:</label>
+                <input type="text" id="trunkAddress" placeholder="100.x.x.x или hostname">
+            </div>
+            <div class="form-group">
+                <label>Имя транка:</label>
+                <input type="text" id="trunkName" placeholder="garage-01">
+            </div>
+            <div class="form-group">
+                <label>Описание:</label>
+                <input type="text" id="trunkDescription" placeholder="Основной гараж, стойка 1">
+            </div>
+            <div class="form-group">
+                <label>Количество слотов:</label>
+                <select id="trunkSlots">
+                    <option value="10">10 слотов (стандарт)</option>
+                    <option value="5">5 слотов (мини)</option>
+                    <option value="20">20 слотов (расширенный)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Тип транка:</label>
+                <select id="trunkType">
+                    <option value="sip">SIP транк</option>
+                    <option value="gsm">GSM шлюз</option>
+                    <option value="analog">Аналоговый</option>
+                </select>
+            </div>
+            <div style="text-align: right; margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn" onclick="closeModal('addTrunkModal')">Отмена</button>
+                <button class="btn btn-success" onclick="addTrunk()">Добавить транк</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="slotAccessModal" class="modal">
+        <div class="modal-content access-modal">
+            <button class="close-btn" onclick="closeModal('slotAccessModal')">×</button>
+            <h3>Доступ к слоту <span id="accessSlotNumber"></span></h3>
+            <div class="panel">
+                <p><strong>Транк:</strong> <span id="accessTrunkName"></span></p>
+                <p><strong>Tailscale IP:</strong> <span id="accessTrunkIp"></span></p>
+                <p><strong>Статус слота:</strong> <span id="accessSlotStatus"></span></p>
+                <p><strong>Магнитола:</strong> Android 2DIN Headunit</p>
+            </div>
+            
+            <h4 style="margin: 20px 0 10px 0;">Выберите тип доступа:</h4>
+            <div class="access-options">
+                <div class="access-option cli" onclick="openCLI()">
+                    <div class="access-icon">💻</div>
+                    <h4>CLI / SSH</h4>
+                    <p>Командная строка через SSH</p>
+                    <p><small>ADB, терминал, файлы</small></p>
+                </div>
+                <div class="access-option guacamole" onclick="openGuacamole()">
+                    <div class="access-icon">🖥️</div>
+                    <h4>Guacamole RDP</h4>
+                    <p>Графический интерфейс</p>
+                    <p><small>VNC, RDP, веб-доступ</small></p>
+                </div>
+            </div>
+            
+            <div style="text-align: right; margin-top: 20px;">
+                <button class="btn" onclick="closeModal('slotAccessModal')">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="warRoomModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <button class="close-btn" onclick="closeModal('warRoomModal')">×</button>
+            <h3>War Room - <span id="warRoomTrunkName"></span> (Слот <span id="warRoomSlotNumber"></span>)</h3>
+            
+            <div class="war-room-container" id="warRoomContainer">
+            </div>
+            
+            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-warning" onclick="restartSlot()">Перезапустить слот</button>
+                <button class="btn btn-danger" onclick="closeModal('warRoomModal')">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="cliModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <button class="close-btn" onclick="closeModal('cliModal')">×</button>
+            <h3>CLI терминал - <span id="cliTrunkName"></span> (Слот <span id="cliSlotNumber"></span>)</h3>
+            
+            <div class="terminal-window" id="terminalOutput">
+                <div class="terminal-line">
+                    <span class="terminal-prompt">root@android-headunit:~# </span>
+                    <span class="terminal-command">connecting...</span>
+                </div>
+                <div class="terminal-line">Establishing SSH connection to <span id="cliTargetIp"></span>...</div>
+                <div class="terminal-line">Connection established. Android Debug Bridge ready.</div>
+                <div class="terminal-line">
+                    <span class="terminal-prompt">root@android-headunit:~# </span>
+                    <span class="terminal-command" id="currentCommand"></span>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="text" id="cliInput" placeholder="Введите команду (adb shell, logcat, etc...)" style="flex: 1; min-width: 200px; padding: 12px; border-radius: 6px; background: #2c3e50; color: white; border: 1px solid #34495e; font-size: 16px;">
+                <button class="btn btn-cli" onclick="executeCLICommand()">Выполнить</button>
+                <button class="btn btn-warning" onclick="clearTerminal()">Очистить</button>
+                <button class="btn btn-danger" onclick="closeModal('cliModal')">Закрыть</button>
+            </div>
+            
+            <div style="margin-top: 15px; font-size: 14px; color: #bdc3c7;">
+                <strong>Доступные команды:</strong> adb devices, adb shell, logcat, dumpsys, pm list packages
+            </div>
+        </div>
+    </div>
+
+    <div id="guacamoleModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <button class="close-btn" onclick="closeModal('guacamoleModal')">×</button>
+            <h3>Guacamole RDP - <span id="guacTrunkName"></span> (Слот <span id="guacSlotNumber"></span>)</h3>
+            
+            <div class="panel">
+                <p><strong>Подключение к:</strong> <span id="guacTargetIp"></span>:3389</p>
+                <p><strong>Протокол:</strong> RDP (Android x86 Desktop)</p>
+                <p><strong>Статус:</strong> <span id="guacStatus">Инициализация соединения...</span></p>
+            </div>
+            
+            <div class="guacamole-frame" id="guacamoleFrame">
+                <div style="text-align: center;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">🖥️</div>
+                    <h4>Guacamole RDP сессия</h4>
+                    <p>Подключение к графическому интерфейсу магнитолы</p>
+                    <p><small>Загрузка удаленного рабочего стола...</small></p>
+                    <button class="btn btn-guacamole" onclick="connectGuacamole()" style="margin-top: 15px;">Установить соединение</button>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-warning" onclick="reconnectGuacamole()">Переподключиться</button>
+                <button class="btn btn-danger" onclick="closeModal('guacamoleModal')">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="networkConfigModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <button class="close-btn" onclick="closeModal('networkConfigModal')">×</button>
+            <h3>Сетевые настройки</h3>
+            
+            <div class="panel">
+                <h4>Tailscale настройки</h4>
+                <div class="form-group">
+                    <label for="tailscaleHostname">Tailscale Hostname:</label>
+                    <input type="text" id="tailscaleHostname" value="hub-vss-auto" placeholder="hub-vss-auto">
+                </div>
+                <div class="form-group">
+                    <label for="tailscaleIp">Tailscale IP адрес:</label>
+                    <input type="text" id="tailscaleIp" value="100.64.1.1" placeholder="100.64.1.1">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="tailscaleEnabled" checked> Tailscale включен
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="tailscaleAutoConnect"> Автоматическое подключение при запуске
+                    </label>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h4>Сетевые интерфейсы</h4>
+                <div id="networkInterfaces" style="margin-top: 10px;">
+                    <div style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+                        <strong>eth0</strong> - 192.168.1.100/24<br>
+                        <small>Статус: Активен | Скорость: 1000 Mbps</small>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+                        <strong>wlan0</strong> - 192.168.1.101/24<br>
+                        <small>Статус: Активен | Скорость: 300 Mbps</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h4>Порты и сервисы</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                    <div style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
+                        <strong>SSH</strong><br>
+                        <small>Порт: 22 | Статус: Открыт</small>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
+                        <strong>HTTP</strong><br>
+                        <small>Порт: 80 | Статус: Открыт</small>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
+                        <strong>HTTPS</strong><br>
+                        <small>Порт: 443 | Статус: Открыт</small>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
+                        <strong>Tailscale</strong><br>
+                        <small>Порт: 41641 | Статус: Открыт</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn" onclick="testNetworkConnection()">Тест соединения</button>
+                <button class="btn btn-success" onclick="saveNetworkConfig()">Сохранить</button>
+                <button class="btn btn-danger" onclick="closeModal('networkConfigModal')">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="project-trunk-dashboard.js"></script>
+</body>
+</html>
+

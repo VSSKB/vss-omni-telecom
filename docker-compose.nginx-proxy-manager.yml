@@ -1,0 +1,25 @@
+services:
+  nginx-proxy-manager:
+    image: jlesage/nginx-proxy-manager
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+    ports:
+      - "8181:8181"  # Admin UI
+      - "80:8080"    # HTTP (port 80 now available after IIS disabled)
+      - "4443:4443"  # HTTPS
+    volumes:
+      - ./nginx-proxy-manager-data:/config:rw
+    networks:
+      - vss-network
+    environment:
+      - DISABLE_IPV6=true
+
+networks:
+  vss-network:
+    name: vss-omni-telecom_vss-network
+    external: true
+
+volumes:
+  nginx-proxy-manager-data:
+    driver: local
+

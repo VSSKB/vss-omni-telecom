@@ -1,0 +1,1488 @@
+<!DOCTYPE ahtml>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSS Draw: Редактируемая архитектура системы</title>
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Prism.js -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+        }
+        :root {
+            --primary-color: #005a9c;
+            --secondary-color: #4a90e2;
+            --border-color: #ccc;
+            --success-color: #28a745;
+        }
+        .nav-pills .nav-link.active, .nav-pills .show > .nav-link {
+            background-color: #007bff;
+            color: white;
+        }
+        .card {
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .form-control, .btn, .nav-link {
+            border-radius: 0.5rem;
+        }
+        .code-block-container {
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+        }
+        .toc {
+            position: sticky;
+            top: 1rem;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .highlighted {
+            background-color: yellow;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .page {
+            display: none;
+            padding: 20px;
+        }
+        .page.active {
+            display: block;
+        }
+        /* Модальные окна */
+        .modal-custom {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content-custom {
+            background-color: #fefefe;
+            padding: 0;
+            border: 1px solid #888;
+            width: 90%;
+            max-width: 700px;
+            border-radius: 15px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.3);
+            animation: fadeIn 0.5s;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header-custom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            padding: 15px 25px;
+        }
+        .modal-header-custom h3 {
+            margin: 0;
+            text-align: left;
+        }
+        .close-custom {
+            color: #aaa;
+            font-size: 32px;
+            font-weight: bold;
+            transition: color 0.2s;
+        }
+        .close-custom:hover, .close-custom:focus {
+            color: #333;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .modal-body-custom {
+            padding: 20px 25px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .modal-footer-custom {
+            padding: 15px 25px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            background-color: #f9f9f9;
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 15px;
+        }
+        pre.prism-code {
+            background-color: #2d2d2d;
+            color: #f8f8f2;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        textarea.edit-area {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        textarea.edit-area-code {
+            min-height: 200px;
+            background-color: #2d2d2d;
+            color: #f8f8f2;
+        }
+        .modal-btn, .toolbar-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        .btn-primary, .toolbar-btn-primary {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+        .btn-primary:hover, .toolbar-btn-primary:hover {
+            background-color: var(--primary-color);
+        }
+        .btn-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+        .btn-success:hover {
+            background-color: #218838;
+        }
+        .btn-secondary, .toolbar-btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover, .toolbar-btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        .hidden {
+            display: none;
+        }
+        #saveToast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--success-color);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.5s, transform 0.5s;
+            visibility: hidden;
+        }
+        #saveToast.show {
+            opacity: 1;
+            transform: translate(-50%, -10px);
+            visibility: visible;
+        }
+        #fileInput {
+            display: none;
+        }
+        #diagram-container {
+            display: flex;
+            gap: 1rem;
+        }
+        #myDiagramDiv {
+            flex-grow: 1;
+            height: 600px;
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+        }
+        #myPaletteDiv {
+            width: 150px;
+            min-width: 150px;
+            background-color: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .palette-node {
+            padding: 8px;
+            cursor: move;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+            text-align: center;
+        }
+        .palette-node:hover {
+            background-color: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid p-4">
+        <div class="row">
+            <div class="col-lg-3 d-none d-lg-block">
+                <div class="card p-3">
+                    <h5 class="fw-bold">Меню</h5>
+                    <ul class="nav nav-pills flex-column" id="pills-tab-menu" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="draw-tab-menu" data-bs-toggle="pill" data-bs-target="#draw-page" type="button" role="tab">Рисовать</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="status-tab-menu" data-bs-toggle="pill" data-bs-target="#status-page" type="button" role="tab">Статус</button>
+                        </li>
+                    </ul>
+                    <hr>
+                    <h5 class="fw-bold">Обзор</h5>
+                    <ul class="nav flex-column" id="toc-list"></ul>
+                </div>
+            </div>
+            <div class="col-lg-9">
+                <div class="card p-4 fade-in">
+                    <h1 class="mb-4">VSS Draw Creator: Редактируемая архитектура систем</h1>
+                    <p>Это автономный модуль для CREATOR-ADMIN, позволяющий создавать и редактировать схемы автоматизации звонков. Щелкните по узлу, чтобы увидеть описание и код. Вы можете добавлять/удалять узлы, связи, сохранять изменения и экспортировать диаграмму.</p>
+                    <div class="mb-4">
+                        <div class="input-group">
+                            <input type="text" id="search-input" class="form-control" placeholder="Поиск по странице...">
+                            <button class="btn btn-outline-secondary" type="button" id="searchBtn">Найти</button>
+                        </div>
+                    </div>
+                    <div class="tab-content" id="pills-tabContent">
+                        <div class="tab-pane fade show active" id="draw-page" role="tabpanel" aria-labelledby="draw-tab">
+                            <h2 class="h4">Редактор схем</h2>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <button id="saveJsonBtn" class="btn btn-primary"><i class="fas fa-save me-1"></i>Сохранить JSON</button>
+                                <button id="loadJsonBtn" class="btn btn-info text-white"><i class="fas fa-folder-open me-1"></i>Загрузить JSON</button>
+                                <button id="exportPngBtn" class="btn btn-primary"><i class="fas fa-image me-1"></i>Экспорт в PNG</button>
+                                <button id="exportSvgBtn" class="btn btn-primary"><i class="fas fa-image me-1"></i>Экспорт в SVG</button>
+                                <button id="exportPdfBtn" class="btn btn-primary"><i class="fas fa-file-pdf me-1"></i>Экспорт в PDF</button>
+                                <button id="resetDiagramBtn" class="btn btn-secondary"><i class="fas fa-undo me-1"></i>Сбросить</button>
+                                <button id="clearStorageBtn" class="btn btn-danger"><i class="fas fa-trash-alt me-1"></i>Очистить</button>
+                                <button id="summaryAiBtn" class="btn btn-primary"><i class="fas fa-magic me-1"></i>Обзор с AI</button>
+                            </div>
+                            <input type="file" id="fileInput" accept=".json">
+                            <div id="diagram-container">
+                                <div id="myDiagramDiv" class="shadow-sm"></div>
+                                <div id="myPaletteDiv" class="shadow-sm"></div>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="status-page" role="tabpanel" aria-labelledby="status-tab">
+                            <h2 class="h4">Статус мониторинга</h2>
+                            <div class="card p-3 mt-3 shadow-sm">
+                                <div id="status-text" class="mb-3">Загрузка...</div>
+                                <button class="btn btn-success" id="refreshStatusBtn"><i class="fas fa-sync-alt me-1"></i>Обновить статус</button>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <h2 id="section-project-overview">Обзор модуля</h2>
+                    <p>Модуль VSS Draw предоставляет:</p>
+                    <ul>
+                        <li>Фронтенд: GoJS для рисования блок-схем с поддержкой редактирования и экспорта.</li>
+                        <li>Бэкенд: Express.js сервер с API (/api/diagrams, /api/status) — реализовано как заглушки.</li>
+                        <li>Базы: SQLite (diagrams.db для схем, monitor-data.db для статуса) — эмуляция в localStorage.</li>
+                        <li>Структура: Соответствует архитектуре VSS "CREATOR-ADMIN".</li>
+                    </ul>
+                    <hr>
+                    <h2 id="section-server">Сервер (src/index.js)</h2>
+                    <p>Сервер на Express.js обслуживает public/index.html и API. Код предназначен для работы на сервере и представлен как заглушка. Ниже показана его структура:</p>
+                    <div class="code-block-container">
+                        <pre><code class="language-javascript">
+const express = require("express");
+const admin = require("firebase-admin");
+const path = require("path");
+const fs = require("fs");
+
+const app = express();
+const serviceAccount = require("./serviceAccountKey.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+const db = admin.firestore();
+
+// Routes
+app.get("/api/diagrams", (req, res) => { /* ... */ });
+app.post("/api/diagrams", (req, res) => { /* ... */ });
+app.delete("/api/diagrams/:id", (req, res) => { /* ... */ });
+app.get("/api/status", (req, res) => { /* ... */ });
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Сервер запущен на http://localhost:${PORT}`);
+});
+                        </code></pre>
+                        <button class="btn btn-sm btn-outline-secondary copy-btn" id="copyCodeBtn1">Копировать</button>
+                    </div>
+                    <hr>
+                    <h2 id="section-setup">Скрипт автосетапа (setup.sh)</h2>
+                    <p>Скрипт автоматизирует установку и развертывание модуля. Представлен как заглушка для терминала:</p>
+                    <div class="code-block-container">
+                        <pre><code class="language-bash">
+#!/bin/bash
+echo "Установка модуля VSS Draw..."
+if ! command -v docker &> /dev/null; then
+    echo “Установка Docker…”
+    sudo apt update
+    sudo apt install -y docker.io docker-compose sqlite3
+fi
+# ... создание папок и файлов ...
+docker build -t vss-draw .
+docker run -d -p 3000:3000 -v "$(pwd)/src/data:/app/src/data" -v "$(pwd)/logs:/app/logs" --name vss-draw-container --restart unless-stopped vss-draw
+                        </code></pre>
+                        <button class="btn btn-sm btn-outline-secondary copy-btn" id="copyCodeBtn2">Копировать</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="myModal" class="modal-custom">
+        <div class="modal-content-custom">
+            <div class="modal-header-custom">
+                <h3 id="modalTitle"></h3>
+                <span class="close-custom" id="closeModalBtn">&times;</span>
+            </div>
+            <div class="modal-body-custom">
+                <div id="viewMode">
+                    <p id="modalText"></p>
+                    <pre id="modalCode" class="prism-code language-none"></pre>
+                </div>
+                <div id="editMode" class="hidden">
+                    <label for="editText">Описание:</label>
+                    <div class="d-flex mb-3">
+                        <textarea id="editText" class="edit-area"></textarea>
+                        <button id="generateAIBtn" class="btn btn-primary ms-2"><i class="fas fa-magic"></i></button>
+                    </div>
+                    <label for="editCode" style="margin-top:15px; display:block;">Код:</label>
+                    <textarea id="editCode" class="edit-area edit-area-code"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer-custom">
+                <button id="editBtn" class="modal-btn btn-secondary"><i class="fas fa-edit me-1"></i>Редактировать</button>
+                <button id="saveBtn" class="modal-btn btn-success hidden"><i class="fas fa-save me-1"></i>Сохранить</button>
+                <button id="cancelBtn" class="modal-btn btn-secondary hidden">Отмена</button>
+                <button id="downloadBtn" class="modal-btn btn-primary"><i class="fas fa-download me-1"></i>Скачать</button>
+            </div>
+        </div>
+    </div>
+    <div id="messageBoxModal" class="modal-custom">
+        <div class="modal-content-custom">
+            <div class="modal-header-custom">
+                <h3 id="messageBoxTitle">Сообщение</h3>
+                <span class="close-custom" id="closeMessageBoxBtn">&times;</span>
+            </div>
+            <div class="modal-body-custom">
+                <p id="messageBoxText"></p>
+            </div>
+            <div class="modal-footer-custom">
+                <button class="btn btn-primary" id="messageBoxOkBtn">ОК</button>
+            </div>
+        </div>
+    </div>
+    <div id="confirmBoxModal" class="modal-custom">
+        <div class="modal-content-custom">
+            <div class="modal-header-custom">
+                <h3 id="confirmBoxTitle">Подтверждение</h3>
+                <span class="close-custom" id="closeConfirmBoxBtn">&times;</span>
+            </div>
+            <div class="modal-body-custom">
+                <p id="confirmBoxText"></p>
+            </div>
+            <div class="modal-footer-custom">
+                <button class="btn btn-secondary" id="confirmCancelBtn">Отмена</button>
+                <button class="btn btn-danger" id="confirmOkBtn">Подтвердить</button>
+            </div>
+        </div>
+    </div>
+    <div id="inputBoxModal" class="modal-custom">
+        <div class="modal-content-custom">
+            <div class="modal-header-custom">
+                <h3 id="inputBoxTitle">Введите данные</h3>
+                <span class="close-custom" id="closeInputBoxBtn">&times;</span>
+            </div>
+            <div class="modal-body-custom">
+                <p id="inputBoxText"></p>
+                <input type="text" id="inputBoxInput" class="form-control mt-2">
+            </div>
+            <div class="modal-footer-custom">
+                <button class="btn btn-secondary" id="inputCancelBtn">Отмена</button>
+                <button id="inputBoxOKBtn" class="btn btn-primary">ОК</button>
+            </div>
+        </div>
+    </div>
+    <div id="selectBoxModal" class="modal-custom">
+        <div class="modal-content-custom">
+            <div class="modal-header-custom">
+                <h3 id="selectBoxTitle">Выберите схему</h3>
+                <span class="close-custom" id="closeSelectBoxBtn">&times;</span>
+            </div>
+            <div class="modal-body-custom">
+                <select id="diagram-selector" class="form-select"></select>
+            </div>
+            <div class="modal-footer-custom">
+                <button class="btn btn-primary" id="loadSelectedDiagramBtn">Загрузить</button>
+                <button class="btn btn-danger" id="deleteSelectedDiagramBtn">Удалить</button>
+            </div>
+        </div>
+    </div>
+    <div id="mySubdiagramModal" class="modal-custom">
+        <div class="modal-content-custom">
+            <div class="modal-header-custom">
+                <h3 id="subdiagramModalTitle"></h3>
+                <span class="close-custom" id="closeSubdiagramModalBtn">&times;</span>
+            </div>
+            <div class="modal-body-custom">
+                <p id="subdiagramModalText"></p>
+            </div>
+            <div class="modal-footer-custom">
+                <button class="btn btn-secondary" id="backFromSubdiagramBtn">Назад</button>
+                <button class="btn btn-primary" id="editSubdiagramBtn">Редактировать</button>
+                <button class="btn btn-danger" id="deleteSubdiagramBtn">Удалить</button>
+                <button class="btn btn-success" id="buildSubdiagramBtn">Сборка</button>
+            </div>
+        </div>
+    </div>
+    <div id="saveToast">Сохранено!</div>
+    <script src="https://unpkg.com/gojs@2.3.19/release/go.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-powershell.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-ini.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-autohotkey.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const VssDrawApp = {
+                // Main app data and state
+                myDiagram: null,
+                nodesData: {
+                    nodeA: { key: "nodeA", text: "Набор номера на IP-телефоне", description: "Процесс начинается, когда пользователь набирает номер на IP-телефоне. Устройство отправляет SIP-сообщение INVITE на сервер Asterisk.", code: "", group: "asterisk", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" },
+                    nodeB: { key: "nodeB", text: "Диалплан Asterisk", description: "Asterisk обрабатывает INVITE согласно правилам в файле extensions.conf. Диалплан инициирует два параллельных вызова.", code: `[dial-from-asterisk-to-windows]
+exten => _8XXXXXXXXXX,1,NoOp(Starting dual call from Asterisk)
+same => n,Set(CALLED_NUM=\${EXTEN:1})
+same => n,System(ssh user@windows_pc_ip "/usr/bin/pwsh.exe -file C:\\Scripts\\call_mobile.ps1 -PhoneNumber \${CALLED_NUM}")
+same => n,Wait(5)
+same => n,Dial(SIP/softphone,30,tTr)
+same => n,Hangup()`, filename: "extensions_part.conf", group: "asterisk", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" },
+                    nodeC: { key: "nodeC", text: "Вызов PowerShell через SSH", description: "Asterisk выполняет команду 'System(ssh ...)', которая запускает PowerShell-скрипт на Windows PC.", code: `ssh user@windows_pc_ip "/usr/bin/pwsh.exe -file C:\\Scripts\\call_mobile.ps1 -PhoneNumber \${CALLED_NUM}"`, group: "asterisk", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" },
+                    nodeD: { key: "nodeD", text: "Звонок на SIP-телефон", description: "Параллельно Asterisk совершает второй звонок на программный SIP-телефон, установленный на Windows PC.", code: "same => n,Dial(SIP/softphone,30,tTr)", group: "asterisk", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" },
+                    nodeE: { key: "nodeE", text: "SIP-телефон на Windows", description: "Программный SIP-телефон (например, Linphone или Zoiper) автоматически принимает звонок от Asterisk.", code: "", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" },
+                    nodeF: { key: "nodeF", text: "Микрофон / Динамики", description: "Звук от внешнего абонента воспроизводится через динамики ПК, а голос пользователя улавливается микрофоном.", code: "", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" },
+                    nodeG: { key: "nodeG", text: "Скрипт PowerShell", description: "Скрипт запускает приложение 'Связь с телефоном' и передает ему номер для набора.", code: `param (
+    [string]$PhoneNumber
+)
+Start-Process "ms-phone-dial:$PhoneNumber"
+Start-Process "C:\\Scripts\\full_call_script.ahk"`, filename: "call_mobile.ps1", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" },
+                    nodeH: { key: "nodeH", text: "Приложение 'Связь с телефоном' и AutoHotkey", description: "Приложение инициирует звонок через мобильную сеть, используя Bluetooth-соединение с телефоном.", code: `#NoTrayIcon
+#Persistent
+SetTitleMatchMode, 2
+WinWait, Связь с телефоном, , 5
+If WinExist("Связь с телефоном")
+{
+    WinMove, Связь с телефоном, , 1400, 500
+}
+WinWaitActive, Связь с телефоном, , 5
+Sleep, 500
+Button1X := 1700
+Button1Y := 709
+Click, %Button1X%, %Button1Y%
+WinWait, Набор номера..., , 5
+Sleep, 1000
+Button2X := 1700
+Button2Y := 750
+Click, %Button2X%, %Button2Y%
+WinWaitActive, ahk_class ApplicationFrameWindow, , 5
+Sleep, 1000
+Button3X := 1825
+Button3Y := 276
+Click, %Button3X%, %Button3Y%
+ExitApp`, filename: "full_call_script.ahk", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" },
+                    nodeI: { key: "nodeI", text: "Внешний абонент", description: "Это конечный получатель звонка. Аудиопоток идет через SIP-телефон на Windows.", code: "", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" },
+                    nodeJ: { key: "nodeJ", text: "Веб-интерфейс", description: "Веб-сервер предоставляет интерфейс для мониторинга статуса Windows PC.", code: "", group: "webserver", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" },
+                    nodeK: { key: "nodeK", text: "Агент мониторинга", description: "Скрипт на Windows PC собирает данные о состоянии системы и отправляет их на веб-сервер.", code: `$hostname = $env:COMPUTERNAME
+$status = "Online"
+$sipStatus = "Active"
+$phoneAppStatus = "Running"
+$data = @{
+    Hostname = $hostname
+    Status = $status
+    SipPhoneStatus = $sipStatus
+    PhoneAppStatus = $phoneAppStatus
+    Timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+} | ConvertTo-Json
+Invoke-RestMethod -Uri "http://your_web_server_ip/api/status" -Method Post -ContentType "application/json" -Body $data`, filename: "monitoring_agent.ps1", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle" }
+                },
+                initialNodesData: null,
+                initialModel: null,
+                currentNodeId: null,
+                selectedGroupNode: null,
+                confirmCallback: null,
+                inputCallback: null,
+                
+                // Helper functions to get DOM elements
+                get: function(id) {
+                    return document.getElementById(id);
+                },
+
+                init: function() {
+                    this.initialNodesData = {
+                        nodeA: { key: "nodeA", text: "Набор номера на IP-телефоне", description: "Процесс начинается, когда пользователь набирает номер на IP-телефоне. Устройство отправляет SIP-сообщение INVITE на сервер Asterisk.", code: "", group: "asterisk", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "797.6592508975915 428.34078913633124" },
+                        nodeB: { key: "nodeB", text: "Диалплан Asterisk", description: "Asterisk обрабатывает INVITE согласно правилам в файле extensions.conf. Диалплан инициирует два параллельных вызова.", code: `[dial-from-asterisk-to-windows]\nexten => _8XXXXXXXXXX,1,NoOp(Starting dual call from Asterisk)\nsame => n,Set(CALLED_NUM=\${EXTEN:1})\nsame => n,System(ssh user@windows_pc_ip "/usr/bin/pwsh.exe -file C:\\Scripts\\call_mobile.ps1 -PhoneNumber \${CALLED_NUM}")\nsame => n,Wait(5)\nsame => n,Dial(SIP/softphone,30,tTr)\nsame => n,Hangup()`, filename: "extensions_part.conf", group: "asterisk", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "801.2254130069665 536.2680311658893" },
+                        nodeC: { key: "nodeC", text: "Вызов PowerShell через SSH", description: "Asterisk выполняет команду 'System(ssh ...)', которая запускает PowerShell-скрипт на Windows PC.", code: `ssh user@windows_pc_ip "/usr/bin/pwsh.exe -file C:\\Scripts\\call_mobile.ps1 -PhoneNumber \${CALLED_NUM}"`, group: "asterisk", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "791.0762430850915 644.1952731954472" },
+                        nodeD: { key: "nodeD", text: "Звонок на SIP-телефон", description: "Параллельно Asterisk совершает второй звонок на программный SIP-телефон, установленный на Windows PC.", code: "same => n,Dial(SIP/softphone,30,tTr)", group: "asterisk", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "798.6502176944665 752.122515225005" },
+                        nodeE: { key: "nodeE", text: "SIP-телефон на Windows", description: "Программный SIP-телефон (например, Linphone или Zoiper) автоматически принимает звонок от Asterisk.", code: "", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "302.24482218665395 146.9685357039076" },
+                        nodeF: { key: "nodeF", text: "Микрофон / Динамики", description: "Звук от внешнего абонента воспроизводится через динамики ПК, а голос пользователя улавливается микрофоном.", code: "", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "290.29828898352895 254.89577773346545" },
+                        nodeG: { key: "nodeG", text: "Скрипт PowerShell", description: "Скрипт запускает приложение 'Связь с телефоном' и передает ему номер для набора.", code: `param (
+    [string]$PhoneNumber
+)
+Start-Process "ms-phone-dial:$PhoneNumber"
+Start-Process "C:\\Scripts\\full_call_script.ahk"`, filename: "call_mobile.ps1", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "133.69081482396837 46.756345624154" },
+                        nodeH: { key: "nodeH", text: "Приложение 'Связь с телефоном' и AutoHotkey", description: "Приложение инициирует звонок через мобильную сеть, используя Bluetooth-соединение с телефоном.", code: `#NoTrayIcon
+#Persistent
+SetTitleMatchMode, 2
+WinWait, Связь с телефоном, , 5
+If WinExist("Связь с телефоном")
+{
+    WinMove, Связь с телефоном, , 1400, 500
+}
+WinWaitActive, Связь с телефоном, , 5
+Sleep, 500
+Button1X := 1700
+Button1Y := 709
+Click, %Button1X%, %Button1Y%
+WinWait, Набор номера..., , 5
+Sleep, 1000
+Button2X := 1700
+Button2Y := 750
+Click, %Button2X%, %Button2Y%
+WinWaitActive, ahk_class ApplicationFrameWindow, , 5
+Sleep, 1000
+Button3X := 1825
+Button3Y := 276
+Click, %Button3X%, %Button3Y%
+ExitApp`, filename: "full_call_script.ahk", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "13.761423749153911 146.9685357039076" },
+                        nodeI: { key: "nodeI", text: "Внешний абонент", description: "Это конечный получатель звонка. Аудиопоток идет через SIP-телефон на Windows.", code: "", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "38.56244913977893 254.89577773346545" },
+                        nodeJ: { key: "nodeJ", text: "Веб-интерфейс", description: "Веб-сервер предоставляет интерфейс для мониторинга статуса Windows PC.", code: "", group: "webserver", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "519.1568094913414 590.2316521806681" },
+                        nodeK: { key: "nodeK", text: "Агент мониторинга", description: "Скрипт на Windows PC собирает данные о состоянии системы и отправляет их на веб-сервер.", code: `$hostname = $env:COMPUTERNAME\n$status = "Online"\n$sipStatus = "Active"\n$phoneAppStatus = "Running"\n$data = @{
+    Hostname = $hostname
+    Status = $status
+    SipPhoneStatus = $sipStatus
+    PhoneAppStatus = $phoneAppStatus
+    Timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+} | ConvertTo-Json
+Invoke-RestMethod -Uri "http://your_web_server_ip/api/status" -Method Post -ContentType "application/json" -Body $data`, filename: "monitoring_agent.ps1", group: "windows", color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle", loc: "524.8949686710289 254.89577773346545" }
+                    };
+                    this.initialModel = {
+                        nodeDataArray: [
+                            { key: "asterisk", isGroup: true, title: "Сервер Asterisk" },
+                            { key: "windows", isGroup: true, title: "Windows PC" },
+                            { key: "webserver", isGroup: true, title: "Веб-сервер Мониторинга" },
+                            ...Object.values(this.nodesData)
+                        ],
+                        linkDataArray: [
+                            { from: "nodeA", to: "nodeB" },
+                            { from: "nodeB", to: "nodeC" },
+                            { from: "nodeC", to: "nodeD" },
+                            { from: "nodeE", to: "nodeF" },
+                            { from: "nodeG", to: "nodeH" },
+                            { from: "nodeH", to: "nodeI" },
+                            { from: "nodeK", to: "nodeJ" }
+                        ]
+                    };
+                    this.initDiagram();
+                    this.loadData();
+                    this.setupTOC();
+                    this.setupCopyButtons();
+                    this.setupEventListeners();
+                },
+
+                // --- GoJS Diagram Initialization and Templates ---
+                initDiagram: function() {
+                    const $ = go.GraphObject.make;
+                    this.myDiagram = $(go.Diagram, "myDiagramDiv", {
+                        "undoManager.isEnabled": true,
+                        "allowCopy": true,
+                        "allowDelete": true,
+                        layout: $(go.LayeredDigraphLayout, { direction: 90, layerSpacing: 30 }),
+                        "click": (e) => { this.myDiagram.selection.clear(); },
+                        "contextMenu": $(go.Adornment, "Vertical",
+                            $("ContextMenuButton",
+                                $(go.TextBlock, "Добавить узел"),
+                                {
+                                    click: (e, obj) => {
+                                        this.myDiagram.toolManager.contextMenuTool.hideContextMenu();
+                                        this.myDiagram.startTransaction("add node");
+                                        const newKey = `node${Date.now()}`;
+                                        const pos = this.myDiagram.toolManager.contextMenuTool.mouseDownPoint;
+                                        const newData = {
+                                            key: newKey, text: "Новый узел", description: "Описание",
+                                            loc: go.Point.stringify(pos),
+                                            code: "", group: null, color: "#fff", font: "500 1.1em Inter, sans-serif", shape: "RoundedRectangle"
+                                        };
+                                        this.nodesData[newKey] = newData;
+                                        this.myDiagram.model.addNodeData(newData);
+                                        this.myDiagram.commitTransaction("add node");
+                                        this.saveData();
+                                    }
+                                }
+                            )
+                        )
+                    });
+
+                    this.myDiagram.groupTemplate = $(
+                        go.Group, "Auto",
+                        {
+                            layout: $(go.LayeredDigraphLayout, { direction: 90, columnSpacing: 10 }),
+                            computesBoundsAfterDrag: true,
+                            background: "#fafafa",
+                            isSubGraphExpanded: true,
+                            doubleClick: (e, obj) => {
+                                this.myDiagram.selection.clear();
+                                this.myDiagram.select(obj.part);
+                                this.openSubdiagramModal(obj.part.data);
+                            }
+                        },
+                        $(go.Shape, "RoundedRectangle", {
+                            fill: null, stroke: "#bbb", strokeWidth: 2, strokeDashArray: [4, 4]
+                        }),
+                        $(go.Panel, "Vertical",
+                            $(go.TextBlock, { font: "700 1.2em Inter, sans-serif", margin: new go.Margin(10, 0, 10, 0), stroke: "#555" },
+                                new go.Binding("text", "title")),
+                            $(go.Placeholder, { padding: 10 })
+                        )
+                    );
+
+                    this.myDiagram.nodeTemplate = $(
+                        go.Node, "Auto",
+                        {
+                            movable: true, deletable: true,
+                            click: (e, node) => { this.openModal(node.data.key); },
+                            selectionAdorned: false, cursor: "pointer",
+                            toolTip: $(
+                                go.Adornment, "Auto",
+                                $(go.Shape, { fill: "#FFFFCC", stroke: "#999", strokeWidth: 1 }),
+                                $(go.TextBlock, { margin: 8, font: "14px Inter, sans-serif", maxSize: new go.Size(200, NaN) },
+                                    new go.Binding("text", "description"))
+                            ),
+                            contextMenu: $(go.Adornment, "Vertical",
+                                $("ContextMenuButton",
+                                    $(go.TextBlock, "Изменить форму"),
+                                    {
+                                        click: (e, obj) => {
+                                            this.myDiagram.toolManager.contextMenuTool.hideContextMenu();
+                                            const node = obj.part.adornedPart;
+                                            if (node instanceof go.Node) {
+                                                const shapes = ["RoundedRectangle", "Circle", "Diamond"];
+                                                const currentShapeIndex = shapes.indexOf(node.data.shape);
+                                                const newShape = shapes[(currentShapeIndex + 1) % shapes.length];
+                                                this.myDiagram.model.commit(m => {
+                                                    m.set(node.data, "shape", newShape);
+                                                    this.nodesData[node.data.key].shape = newShape;
+                                                    this.saveData();
+                                                });
+                                            }
+                                        }
+                                    }
+                                ),
+                                $("ContextMenuButton",
+                                    $(go.TextBlock, "Изменить шрифт"),
+                                    {
+                                        click: (e, obj) => {
+                                            this.myDiagram.toolManager.contextMenuTool.hideContextMenu();
+                                            const node = obj.part.adornedPart;
+                                            if (node instanceof go.Node) {
+                                                const currentFont = node.findObject("TEXT").font;
+                                                this.showMessageBoxWithInput("Введите размер шрифта (например, 14):", (newSize) => {
+                                                    if (newSize && !isNaN(newSize)) {
+                                                        this.myDiagram.model.commit(m => {
+                                                            m.set(node.data, "font", `500 ${newSize}px Inter, sans-serif`);
+                                                            this.nodesData[node.data.key].font = `500 ${newSize}px Inter, sans-serif`;
+                                                            this.saveData();
+                                                        });
+                                                    }
+                                                }, parseInt(currentFont) || 14);
+                                            }
+                                        }
+                                    }
+                                ),
+                                $("ContextMenuButton",
+                                    $(go.TextBlock, "Изменить цвет"),
+                                    {
+                                        click: (e, obj) => {
+                                            this.myDiagram.toolManager.contextMenuTool.hideContextMenu();
+                                            const node = obj.part.adornedPart;
+                                            if (node instanceof go.Node) {
+                                                this.showMessageBoxWithInput("Введите цвет фона (например, #fff, lightblue):", (newColor) => {
+                                                    if (newColor) {
+                                                        this.myDiagram.model.commit(m => {
+                                                            m.set(node.data, "color", newColor);
+                                                            this.nodesData[node.data.key].color = newColor;
+                                                            this.saveData();
+                                                        });
+                                                    }
+                                                }, node.data.color || "#fff");
+                                            }
+                                        }
+                                    }
+                                ),
+                                $("ContextMenuButton",
+                                    $(go.TextBlock, "Удалить узел"),
+                                    {
+                                        click: (e, obj) => {
+                                            this.myDiagram.toolManager.contextMenuTool.hideContextMenu();
+                                            const node = obj.part.adornedPart;
+                                            if (node instanceof go.Node) {
+                                                this.confirmBox("Вы уверены, что хотите удалить этот узел?", () => {
+                                                    this.myDiagram.commandHandler.deleteSelection();
+                                                });
+                                            }
+                                        }
+                                    }
+                                )
+                            )
+                        },
+                        new go.Binding("location", "loc", go.Point.parse).makeTwoWay(go.Point.stringify),
+                        $(go.Shape, {
+                            figure: "RoundedRectangle", fill: "#fff", stroke: "var(--border-color)", strokeWidth: 2,
+                            portId: "", fromLinkable: true, toLinkable: true, cursor: "pointer"
+                        }, new go.Binding("fill", "color", c => c || "#fff"), new go.Binding("figure", "shape")),
+                        $(go.Panel, "Vertical",
+                            $(go.TextBlock, {
+                                margin: 8, editable: true, font: "500 1.1em Inter, sans-serif", stroke: "var(--primary-color)", name: "TEXT"
+                            }, new go.Binding("text", "text").makeTwoWay(), new go.Binding("font", "font")),
+                            $(go.TextBlock, {
+                                margin: new go.Margin(0, 8, 8, 8), font: "400 0.9em Inter, sans-serif", opacity: 0.7,
+                                maxSize: new go.Size(200, 40), wrap: go.TextBlock.WrapFit
+                            }, new go.Binding("text", "description", desc => (desc && desc.length > 50) ? desc.substring(0, 50) + "..." : desc))
+                        )
+                    );
+
+                    this.myDiagram.linkTemplate = $(
+                        go.Link,
+                        {
+                            routing: go.Link.Orthogonal, corner: 5, relinkableFrom: true, relinkableTo: true,
+                            contextMenu: $(go.Adornment, "Vertical",
+                                $("ContextMenuButton",
+                                    $(go.TextBlock, "Редактировать текст"),
+                                    {
+                                        click: (e, obj) => {
+                                            this.myDiagram.toolManager.contextMenuTool.hideContextMenu();
+                                            const link = obj.part.adornedPart;
+                                            if (link instanceof go.Link) {
+                                                this.myDiagram.commandHandler.editTextBlock(link.findObject("TEXT"));
+                                            }
+                                        }
+                                    }
+                                ),
+                                $("ContextMenuButton",
+                                    $(go.TextBlock, "Удалить связь"),
+                                    {
+                                        click: (e, obj) => {
+                                            this.myDiagram.toolManager.contextMenuTool.hideContextMenu();
+                                            const link = obj.part.adornedPart;
+                                            if (link instanceof go.Link) {
+                                                this.confirmBox("Вы уверены, что хотите удалить эту связь?", () => {
+                                                    this.myDiagram.commandHandler.deleteSelection();
+                                                });
+                                            }
+                                        }
+                                    }
+                                )
+                            )
+                        },
+                        $(go.Shape, { strokeWidth: 2, stroke: "#aaa" }),
+                        $(go.Shape, { toArrow: "Standard", fill: "#aaa", stroke: null }),
+                        $(go.TextBlock, {
+                            segmentIndex: 0, segmentOffset: new go.Point(10, 20), editable: true, name: "TEXT"
+                        }, new go.Binding("text", "text").makeTwoWay())
+                    );
+
+                    const palette = $(go.Palette, "myPaletteDiv", {
+                        nodeTemplateMap: this.myDiagram.nodeTemplateMap,
+                        model: new go.GraphLinksModel([
+                            { text: "Начало", shape: "Circle" },
+                            { text: "Процесс", shape: "RoundedRectangle" },
+                            { text: "Решение", shape: "Diamond" },
+                            { text: "Конец", shape: "Circle" }
+                        ])
+                    });
+
+                    this.myDiagram.addDiagramListener("ExternalObjectsDropped", (e) => this.handleExternalObjectsDropped(e));
+                    this.myDiagram.addDiagramListener("TextEdited", (e) => this.handleTextEdited(e));
+                    this.myDiagram.addDiagramListener("SelectionDeleted", (e) => this.handleSelectionDeleted(e));
+                    this.myDiagram.addDiagramListener("LinkRelinked", (e) => this.handleLinkRelinked(e));
+                },
+
+                // --- GoJS Event Handlers ---
+                handleExternalObjectsDropped: function(e) {
+                    const newNode = e.subject.first();
+                    if (newNode) {
+                        const newKey = `node${Date.now()}`;
+                        const newData = {
+                            key: newKey, text: newNode.data.text, description: "Описание нового узла",
+                            code: "", group: null, color: "#fff", font: "500 1.1em Inter, sans-serif", shape: newNode.data.shape || "RoundedRectangle"
+                        };
+                        this.nodesData[newKey] = newData;
+                        this.myDiagram.model.addNodeData(newData);
+                        this.saveData();
+                    }
+                },
+                handleTextEdited: function(e) {
+                    const part = e.subject.part;
+                    if (part instanceof go.Node && this.nodesData[part.data.key]) {
+                        this.nodesData[part.data.key].text = part.data.text;
+                        this.saveData();
+                    } else if (part instanceof go.Link) {
+                        this.saveData();
+                    }
+                },
+                handleSelectionDeleted: function(e) {
+                    e.subject.each(part => {
+                        if (part instanceof go.Node && this.nodesData[part.data.key]) {
+                            delete this.nodesData[part.data.key];
+                        }
+                    });
+                    this.saveData();
+                },
+                handleLinkRelinked: function(e) {
+                    this.saveData();
+                },
+
+                // --- Data Management (localStorage) ---
+                saveData: function() {
+                    const modelData = this.myDiagram.model.toJson();
+                    localStorage.setItem('diagramData', modelData);
+                },
+                loadData: function() {
+                    const savedModel = localStorage.getItem('diagramData');
+                    if (savedModel) {
+                        this.myDiagram.model = go.Model.fromJson(savedModel);
+                    } else {
+                        this.myDiagram.model = new go.GraphLinksModel(this.initialModel.nodeDataArray, this.initialModel.linkDataArray);
+                    }
+                },
+                // --- AI Functions ---
+                generateDescriptionWithAI: async function() {
+                    const generateAIBtn = this.get('generateAIBtn');
+                    generateAIBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+                    const nodeName = this.myDiagram.model.nodeDataArray.find(n => n.key === this.currentNodeId)?.text || "";
+                    if (!nodeName) {
+                        this.showMessageBox("Невозможно сгенестрировать описание для пустого узла.");
+                        generateAIBtn.innerHTML = '<i class="fas fa-magic"></i>';
+                        return;
+                    }
+
+                    const systemPrompt = "Вы — технический писатель. Кратко опишите каждый узел в диаграмме как шаг в рабочем процессе. Описание должно быть кратким и четким.";
+                    const userQuery = `Сгенерируйте описание для следующего узла диаграммы: "${nodeName}".`;
+                    const apiKey = "";
+                    if (!apiKey) {
+                        this.showMessageBox("Для использования AI-функций необходимо указать ключ API.");
+                        generateAIBtn.innerHTML = '<i class="fas fa-magic"></i>';
+                        return;
+                    }
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                    const payload = {
+                        contents: [{ parts: [{ text: userQuery }] }],
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        tools: [{ "google_search": {} }],
+                    };
+                    
+                    try {
+                        let response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!response.ok) { throw new Error(`API Error: ${response.status} ${response.statusText}`); }
+                        const result = await response.json();
+                        const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (text) {
+                            this.get('editText').value = text;
+                            this.showToast("Описание сгенерировано.");
+                        } else {
+                            this.showMessageBox("Не удалось получить ответ от AI.");
+                        }
+                    } catch (error) {
+                        console.error("Error calling Gemini API:", error);
+                        this.showMessageBox(`Ошибка при вызове AI: ${error.message}`);
+                    } finally {
+                        generateAIBtn.innerHTML = '<i class="fas fa-magic"></i>';
+                    }
+                },
+
+                buildSubdiagramWithAI: async function() {
+                    this.closeSubdiagramModal();
+                    const nodeData = this.selectedGroupNode;
+                    const groupTitle = nodeData.title;
+                    const buildBtn = this.get('buildSubdiagramBtn');
+
+                    buildBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+                    buildBtn.disabled = true;
+
+                    const systemPrompt = "Вы — технический архитектор. Создайте поддиаграмму для рабочего процесса. Ответ должен быть JSON-объектом с двумя массивами: 'nodes' и 'links'. Массив 'nodes' должен содержать объекты с полями 'key' и 'text'. Массив 'links' должен содержать объекты с полями 'from' и 'to'. Используйте уникальные ключи и создайте простой, но логичный поток.";
+                    const userQuery = `Сгенерируйте поддиаграмму для рабочего процесса, связанного с "${groupTitle}".`;
+                    const apiKey = "";
+                    if (!apiKey) {
+                        this.showMessageBox("Для использования AI-функций необходимо указать ключ API.");
+                        buildBtn.innerHTML = 'Сборка';
+                        buildBtn.disabled = false;
+                        return;
+                    }
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                    
+                    const payload = {
+                        contents: [{ parts: [{ text: userQuery }] }],
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "OBJECT",
+                                properties: {
+                                    "nodes": {
+                                        type: "ARRAY",
+                                        items: {
+                                            type: "OBJECT",
+                                            properties: {
+                                                "key": { "type": "STRING" },
+                                                "text": { "type": "STRING" }
+                                            }
+                                        }
+                                    },
+                                    "links": {
+                                        type: "ARRAY",
+                                        items: {
+                                            type: "OBJECT",
+                                            properties: {
+                                                "from": { "type": "STRING" },
+                                                "to": { "type": "STRING" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    };
+
+                    try {
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!response.ok) { throw new Error(`API Error: ${response.status} ${response.statusText}`); }
+                        const result = await response.json();
+                        const jsonString = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        const data = JSON.parse(jsonString);
+                        
+                        this.myDiagram.model.commit(m => {
+                            data.nodes.forEach(node => {
+                                const newNodeKey = `${nodeData.key}-${node.key}`;
+                                const newDiagramNode = {
+                                    key: newNodeKey,
+                                    text: node.text,
+                                    description: `Сгенерировано AI для группы "${groupTitle}"`,
+                                    group: nodeData.key,
+                                    color: "#e0f7fa",
+                                    font: "500 1.1em Inter, sans-serif",
+                                    shape: "RoundedRectangle"
+                                };
+                                this.nodesData[newNodeKey] = newDiagramNode;
+                                m.addNodeData(newDiagramNode);
+                            });
+
+                            data.links.forEach(link => {
+                                m.addLinkData({
+                                    from: `${nodeData.key}-${link.from}`,
+                                    to: `${nodeData.key}-${link.to}`,
+                                    text: "Связь"
+                                });
+                            });
+                        });
+                        this.saveData();
+                        this.showToast("Поддиаграмма успешно сгенерирована AI.");
+                    } catch (error) {
+                        console.error("Error calling Gemini API:", error);
+                        this.showMessageBox(`Ошибка при вызове AI: ${error.message}`);
+                    } finally {
+                        buildBtn.innerHTML = 'Сборка';
+                        buildBtn.disabled = false;
+                    }
+                },
+
+                generateDiagramSummary: async function() {
+                    const summaryBtn = this.get('summaryAiBtn');
+                    summaryBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+                    summaryBtn.disabled = true;
+
+                    const systemPrompt = "Вы — технический писатель. Проанализируйте заголовки узлов и предоставьте краткое, в одном абзаце, резюме общего рабочего процесса. Сосредоточьтесь на основных шагах и цели автоматизации.";
+                    const diagramData = this.myDiagram.model.nodeDataArray.filter(n => !n.isGroup).map(n => n.text).join(", ");
+                    const userQuery = `Проанализируйте следующие узлы диаграммы и предоставьте краткое резюме рабочего процесса: ${diagramData}.`;
+                    const apiKey = "";
+                    if (!apiKey) {
+                        this.showMessageBox("Для использования AI-функций необходимо указать ключ API.");
+                        summaryBtn.innerHTML = '<i class="fas fa-magic me-1"></i>Обзор с AI';
+                        summaryBtn.disabled = false;
+                        return;
+                    }
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                    const payload = {
+                        contents: [{ parts: [{ text: userQuery }] }],
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        tools: [{ "google_search": {} }],
+                    };
+
+                    try {
+                        let response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!response.ok) { throw new Error(`API Error: ${response.status} ${response.statusText}`); }
+                        const result = await response.json();
+                        const summary = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (summary) {
+                            this.showMessageBox(summary);
+                        } else {
+                            this.showMessageBox("Не удалось получить резюме от AI.");
+                        }
+                    } catch (error) {
+                        console.error("Error calling Gemini API:", error);
+                        this.showMessageBox(`Ошибка при вызове AI: ${error.message}`);
+                    } finally {
+                        summaryBtn.innerHTML = '<i class="fas fa-magic me-1"></i>Обзор с AI';
+                        summaryBtn.disabled = false;
+                    }
+                },
+                // --- Modal Functions ---
+                openModal: function(nodeId) {
+                    this.currentNodeId = nodeId;
+                    const data = this.nodesData[nodeId];
+                    if (!data) return;
+                    
+                    this.get('modalTitle').textContent = data.text;
+                    this.get('modalText').textContent = data.description;
+                    this.get('modalCode').textContent = data.code;
+                    let langClass = "language-none";
+                    if (data.filename) {
+                        if (data.filename.endsWith(".conf")) { langClass = "language-ini"; }
+                        else if (data.filename.endsWith(".ps1")) { langClass = "language-powershell"; }
+                        else if (data.filename.endsWith(".ahk")) { langClass = "language-autohotkey"; }
+                    }
+                    this.get('modalCode').className = `prism-code ${langClass}`;
+                    this.get('modalCode').style.display = data.code ? 'block' : 'none';
+                    Prism.highlightElement(this.get('modalCode'));
+
+                    this.get('editText').value = data.description;
+                    this.get('editCode').value = data.code;
+                    this.get('editCode').style.display = data.code !== undefined ? 'block' : 'none';
+                    this.get('generateAIBtn').style.display = data.code ? 'none' : 'block';
+                    document.querySelector('label[for="editCode"]').style.display = data.code !== undefined ? 'block' : 'none';
+                    this.get('downloadBtn').style.display = data.filename && data.code ? 'inline-flex' : 'none';
+                    
+                    this.switchMode('view');
+                    this.get('myModal').style.display = "flex";
+                },
+                closeModal: function() {
+                    this.get('myModal').style.display = "none";
+                },
+                openSubdiagramModal: function(nodeData) {
+                    this.selectedGroupNode = nodeData;
+                    this.get('subdiagramModalTitle').textContent = `Поддиаграмма для "${nodeData.title}"`;
+                    this.get('subdiagramModalText').textContent = `Вы перешли в поддиаграмму для "${nodeData.title}". Выберите действие.`;
+                    this.get('mySubdiagramModal').style.display = "flex";
+                },
+                closeSubdiagramModal: function() {
+                    this.get('mySubdiagramModal').style.display = "none";
+                    if (this.myDiagram) {
+                        this.myDiagram.selection.clear();
+                    }
+                },
+                showMessageBox: function(message) {
+                    this.get('messageBoxText').textContent = message;
+                    this.get('messageBoxModal').style.display = "flex";
+                },
+                closeMessageBox: function() {
+                    this.get('messageBoxModal').style.display = "none";
+                },
+                confirmBox: function(message, callback) {
+                    this.get('confirmBoxText').textContent = message;
+                    this.confirmCallback = callback;
+                    this.get('confirmBoxModal').style.display = "flex";
+                },
+                closeConfirmBox: function(result) {
+                    this.get('confirmBoxModal').style.display = "none";
+                    if (result && this.confirmCallback) { this.confirmCallback(); }
+                    this.confirmCallback = null;
+                },
+                showMessageBoxWithInput: function(message, callback, defaultValue) {
+                    this.get('inputBoxText').textContent = message;
+                    this.get('inputBoxInput').value = defaultValue || "";
+                    this.inputCallback = callback;
+                    this.get('inputBoxModal').style.display = "flex";
+                },
+                closeInputBox: function(result) {
+                    this.get('inputBoxModal').style.display = "none";
+                    if (result && this.inputCallback) { this.inputCallback(this.get('inputBoxInput').value); }
+                    this.inputCallback = null;
+                },
+                closeSelectBox: function() {
+                    this.get('selectBoxModal').style.display = "none";
+                },
+                showToast: function(message) {
+                    const toast = this.get('saveToast');
+                    toast.textContent = message || "Сохранено!";
+                    toast.classList.add('show');
+                    setTimeout(() => { toast.classList.remove('show'); }, 2000);
+                },
+                switchMode: function(mode) {
+                    const editBtn = this.get('editBtn');
+                    const saveBtn = this.get('saveBtn');
+                    const cancelBtn = this.get('cancelBtn');
+                    const downloadBtn = this.get('downloadBtn');
+                    const viewMode = this.get('viewMode');
+                    const editMode = this.get('editMode');
+
+                    if (mode === 'edit') {
+                        viewMode.classList.add('hidden');
+                        editMode.classList.remove('hidden');
+                        editBtn.classList.add('hidden');
+                        downloadBtn.classList.add('hidden');
+                        saveBtn.classList.remove('hidden');
+                        cancelBtn.classList.remove('hidden');
+                    } else {
+                        editMode.classList.add('hidden');
+                        viewMode.classList.remove('hidden');
+                        saveBtn.classList.add('hidden');
+                        cancelBtn.classList.add('hidden');
+                        editBtn.classList.remove('hidden');
+                        downloadBtn.classList.remove('hidden');
+                    }
+                },
+                // --- UI & Utility Functions ---
+                setupTOC: function() {
+                    const tocList = this.get('toc-list');
+                    const headers = document.querySelectorAll('h2[id]');
+                    tocList.innerHTML = '';
+                    headers.forEach(header => {
+                        const li = document.createElement('li');
+                        const a = document.createElement('a');
+                        a.className = 'nav-link';
+                        a.href = `#${header.id}`;
+                        a.textContent = header.textContent;
+                        a.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            document.querySelector(`#${header.id}`).scrollIntoView({ behavior: 'smooth' });
+                        });
+                        li.appendChild(a);
+                        tocList.appendChild(li);
+                    });
+                },
+                setupCopyButtons: function() {
+                    document.querySelectorAll('.code-block-container').forEach(container => {
+                        const button = container.querySelector('.copy-btn');
+                        if (button) { button.addEventListener('click', () => this.copyCode(button)); }
+                    });
+                },
+                copyCode: function(button) {
+                    const code = button.previousElementSibling.querySelector('code').textContent;
+                    const textarea = document.createElement('textarea');
+                    textarea.value = code;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    this.showToast("Код скопирован!");
+                },
+                searchContent: function() {
+                    const query = this.get('search-input').value.toLowerCase();
+                    const elements = document.querySelectorAll('.card p, .card li, .card h1, .card h2, .card h3, .card h4');
+                    elements.forEach(el => {
+                        el.classList.remove('highlighted');
+                        if (query && el.textContent.toLowerCase().includes(query)) {
+                            el.classList.add('highlighted');
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    });
+                },
+                
+                // --- Event Listeners Setup ---
+                setupEventListeners: function() {
+                    // Tabs
+                    const drawTab = new bootstrap.Tab(this.get('draw-tab-menu'));
+                    const statusTab = new bootstrap.Tab(this.get('status-tab-menu'));
+                    this.get('draw-tab-menu').addEventListener('click', () => { drawTab.show(); this.myDiagram.requestUpdate(); });
+                    this.get('status-tab-menu').addEventListener('click', () => { statusTab.show(); this.refreshStatus(); });
+                    drawTab.show();
+
+                    // Toolbar buttons
+                    this.get("saveJsonBtn").addEventListener("click", () => this.saveToJson());
+                    this.get("loadJsonBtn").addEventListener("click", () => this.get("fileInput").click());
+                    this.get("fileInput").addEventListener("change", (e) => this.loadFromJson(e));
+                    this.get("exportPngBtn").addEventListener("click", () => this.exportToPng());
+                    this.get("exportSvgBtn").addEventListener("click", () => this.exportToSvg());
+                    this.get("exportPdfBtn").addEventListener("click", () => this.exportToPdf());
+                    this.get("resetDiagramBtn").addEventListener("click", () => this.resetDiagram());
+                    this.get("clearStorageBtn").addEventListener("click", () => this.clearStorage());
+                    this.get("searchBtn").addEventListener("click", () => this.searchContent());
+                    this.get("summaryAiBtn").addEventListener('click', () => this.generateDiagramSummary());
+                    this.get("refreshStatusBtn").addEventListener('click', () => this.refreshStatus());
+
+                    // Modals
+                    this.get("closeModalBtn").addEventListener('click', () => this.closeModal());
+                    this.get("closeMessageBoxBtn").addEventListener('click', () => this.closeMessageBox());
+                    this.get("messageBoxOkBtn").addEventListener('click', () => this.closeMessageBox());
+                    this.get("closeConfirmBoxBtn").addEventListener('click', () => this.closeConfirmBox(false));
+                    this.get("confirmCancelBtn").addEventListener('click', () => this.closeConfirmBox(false));
+                    this.get("confirmOkBtn").addEventListener('click', () => this.closeConfirmBox(true));
+                    this.get("closeInputBoxBtn").addEventListener('click', () => this.closeInputBox(false));
+                    this.get("inputCancelBtn").addEventListener('click', () => this.closeInputBox(false));
+                    this.get("inputBoxOKBtn").addEventListener('click', () => this.closeInputBox(true));
+                    this.get("closeSelectBoxBtn").addEventListener('click', () => this.closeSelectBox());
+                    this.get("loadSelectedDiagramBtn").addEventListener('click', () => this.loadSelectedDiagram());
+                    this.get("deleteSelectedDiagramBtn").addEventListener('click', () => this.deleteSelectedDiagram());
+                    this.get("closeSubdiagramModalBtn").addEventListener('click', () => this.closeSubdiagramModal());
+                    this.get("editSubdiagramBtn").addEventListener('click', () => {
+                        this.closeSubdiagramModal();
+                        this.openModal(this.selectedGroupNode.key);
+                        this.switchMode('edit');
+                    });
+                    this.get("deleteSubdiagramBtn").addEventListener('click', () => {
+                        this.closeSubdiagramModal();
+                        this.confirmBox("Вы уверены, что хотите удалить эту группу?", () => {
+                            this.myDiagram.startTransaction("delete group");
+                            this.myDiagram.commandHandler.deleteSelection();
+                            this.myDiagram.commitTransaction("delete group");
+                            this.saveData();
+                            this.showToast("Группа удалена.");
+                        });
+                    });
+                    this.get("buildSubdiagramBtn").addEventListener('click', () => { this.buildSubdiagramWithAI(); });
+                    this.get("editBtn").addEventListener('click', () => this.switchMode('edit'));
+                    this.get("cancelBtn").addEventListener('click', () => this.cancelEdit());
+                    this.get("saveBtn").addEventListener('click', () => this.handleModalSave());
+                    this.get("downloadBtn").addEventListener('click', () => this.handleModalDownload());
+                    this.get('generateAIBtn').addEventListener('click', () => this.generateDescriptionWithAI());
+                },
+                
+                // --- Button Handlers ---
+                saveToJson: function() {
+                    const data = {
+                        diagramModel: this.myDiagram.model.toJson(),
+                        nodesData: this.nodesData
+                    };
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const element = document.createElement("a");
+                    element.href = url;
+                    element.download = "diagram.json";
+                    element.style.display = "none";
+                    document.body.appendChild(element);
+                    element.click();
+                    document.body.removeChild(element);
+                    URL.revokeObjectURL(url);
+                    this.showToast("Диаграмма сохранена в JSON.");
+                },
+                loadFromJson: function(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            this.nodesData = data.nodesData || this.initialNodesData;
+                            this.myDiagram.model = go.Model.fromJson(data.diagramModel);
+                            this.myDiagram.model.nodeDataArray.forEach(node => {
+                                if (this.nodesData[node.key]) {
+                                    this.myDiagram.model.commit(m => {
+                                        m.set(node, "text", this.nodesData[node.key].text);
+                                        m.set(node, "description", this.nodesData[node.key].description);
+                                        m.set(node, "code", this.nodesData[node.key].code);
+                                        m.set(node, "filename", this.nodesData[node.key].filename);
+                                        m.set(node, "group", this.nodesData[node.key].group);
+                                        m.set(node, "color", this.nodesData[node.key].color);
+                                        m.set(node, "font", this.nodesData[node.key].font);
+                                        m.set(node, "shape", this.nodesData[node.key].shape || "RoundedRectangle");
+                                    });
+                                }
+                            });
+                            this.saveData();
+                            this.showToast("Диаграмма загружена из JSON.");
+                        } catch (err) {
+                            this.showMessageBox("Ошибка загрузки файла: неверный формат JSON.");
+                        }
+                    };
+                    reader.readAsText(file);
+                    this.get("fileInput").value = "";
+                },
+                exportToPng: function() {
+                    const img = this.myDiagram.makeImageData({
+                        background: "#fafafa", type: "image/png", scale: 1
+                    });
+                    const element = document.createElement("a");
+                    element.href = img;
+                    element.download = "diagram.png";
+                    element.style.display = "none";
+                    document.body.appendChild(element);
+                    element.click();
+                    document.body.removeChild(element);
+                    this.showToast("Экспортировано в PNG.");
+                },
+                exportToSvg: function() {
+                    const svg = this.myDiagram.makeSvg({
+                        background: "#fafafa", scale: 1
+                    });
+                    const svgStr = new XMLSerializer().serializeToString(svg);
+                    const blob = new Blob([svgStr], { type: "image/svg+xml" });
+                    const url = URL.createObjectURL(blob);
+                    const element = document.createElement("a");
+                    element.href = url;
+                    element.download = "diagram.svg";
+                    element.style.display = "none";
+                    document.body.appendChild(element);
+                    element.click();
+                    document.body.removeChild(element);
+                    URL.revokeObjectURL(url);
+                    this.showToast("Экспортировано в SVG.");
+                },
+                exportToPdf: function() {
+                    const { jsPDF } = window.jspdf;
+                    const imgData = this.myDiagram.makeImageData({
+                        background: "#fafafa", type: "image/png", scale: 1
+                    });
+                    const pdf = new jsPDF({
+                        orientation: "landscape", unit: "pt", format: "a4"
+                    });
+                    const imgProps = pdf.getImageProperties(imgData);
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+                    pdf.save("diagram.pdf");
+                    this.showToast("Экспортировано в PDF.");
+                },
+                resetDiagram: function() {
+                    this.confirmBox("Сбросить диаграмму до начального состояния? Все несохраненные изменения будут потеряны.", () => {
+                        this.nodesData = JSON.parse(JSON.stringify(this.initialNodesData));
+                        this.myDiagram.model = new go.GraphLinksModel(this.initialModel.nodeDataArray, this.initialModel.linkDataArray);
+                        this.saveData();
+                        this.showToast("Диаграмма сброшена.");
+                    });
+                },
+                clearStorage: function() {
+                    this.confirmBox("Очистить локальное хранилище? Все сохраненные изменения будут потеряны.", () => {
+                        localStorage.removeItem("savedDiagrams");
+                        this.savedDiagrams = {};
+                        this.nodesData = JSON.parse(JSON.stringify(this.initialNodesData));
+                        this.myDiagram.model = new go.GraphLinksModel(this.initialModel.nodeDataArray, this.initialModel.linkDataArray);
+                        this.saveData();
+                        this.showToast("Хранилище очищено.");
+                    });
+                },
+                refreshStatus: function() {
+                    const mockStatus = {
+                        hostname: "creator-admin-server",
+                        status: "Online",
+                        sipPhoneStatus: "Active",
+                        phoneAppStatus: "Running",
+                        timestamp: new Date().toISOString()
+                    };
+                    const statusText = this.get('status-text');
+                    statusText.innerHTML = `
+                        <p><strong>Имя хоста:</strong> ${mockStatus.hostname}</p>
+                        <p><strong>Общий статус:</strong> ${mockStatus.status}</p>
+                        <p><strong>Статус SIP-телефона:</strong> ${mockStatus.sipPhoneStatus}</p>
+                        <p><strong>Статус приложения:</strong> ${mockStatus.phoneAppStatus}</p>
+                        <p><strong>Последнее обновление:</strong> ${new Date(mockStatus.timestamp).toLocaleString()}</p>
+                    `;
+                    this.showToast("Статус мониторинга обновлен.");
+                },
+                cancelEdit: function() {
+                    const nodeData = this.nodesData[this.currentNodeId];
+                    this.get('modalText').textContent = nodeData.description;
+                    this.get('modalCode').textContent = nodeData.code;
+                    let langClass = "language-none";
+                    if (nodeData.filename) {
+                        if (nodeData.filename.endsWith(".conf")) { langClass = "language-ini"; }
+                        else if (nodeData.filename.endsWith(".ps1")) { langClass = "language-powershell"; }
+                        else if (nodeData.filename.endsWith(".ahk")) { langClass = "language-autohotkey"; }
+                    }
+                    this.get('modalCode').className = `prism-code ${langClass}`;
+                    Prism.highlightElement(this.get('modalCode'));
+                    this.switchMode('view');
+                },
+                handleModalSave: function() {
+                    const nodeData = this.nodesData[this.currentNodeId];
+                    nodeData.description = this.get("editText").value;
+                    if (nodeData.code !== undefined) { nodeData.code = this.get("editCode").value; }
+                    this.myDiagram.model.commit(m => {
+                        const node = m.findNodeDataForKey(this.currentNodeId);
+                        if (node) {
+                            m.set(node, "text", nodeData.text);
+                            m.set(node, "description", nodeData.description);
+                        }
+                    });
+                    this.saveData();
+                    this.get('modalText').textContent = nodeData.description;
+                    this.get('modalCode').textContent = nodeData.code;
+                    let langClass = "language-none";
+                    if (nodeData.filename) {
+                        if (nodeData.filename.endsWith(".conf")) { langClass = "language-ini"; }
+                        else if (nodeData.filename.endsWith(".ps1")) { langClass = "language-powershell"; }
+                        else if (nodeData.filename.endsWith(".ahk")) { langClass = "language-autohotkey"; }
+                    }
+                    this.get('modalCode').className = `prism-code ${langClass}`;
+                    Prism.highlightElement(this.get('modalCode'));
+                    this.switchMode('view');
+                },
+                handleModalDownload: function() {
+                    const data = this.nodesData[this.currentNodeId];
+                    if (data.filename && data.code) {
+                        const element = document.createElement('a');
+                        element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(data.code));
+                        element.setAttribute('download', data.filename);
+                        element.style.display = 'none';
+                        document.body.appendChild(element);
+                        element.click();
+                        document.body.removeChild(element);
+                    }
+                },
+            };
+            VssDrawApp.init();
+        });
+    </script>
+</body>
+</html>
