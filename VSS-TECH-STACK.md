@@ -171,6 +171,34 @@ VSS (Virtual System Stack) - комплексная телекоммуникац
 - **Конфигурация:** `config/sip/asterisk/`
 - **AMI:** Используется для управления звонками
 
+#### **FreeSWITCH 1.10**
+- **Версия:** freeswitch:1.10.11 (кастомная сборка из Dockerfile)
+- **Назначение:** Высокопроизводительный PBX и мультимедийный коммуникационный сервер
+- **Порты:**
+  - `5080/udp` - SIP UDP
+  - `5080/tcp` - SIP TCP
+  - `5081/tcp` - SIP TLS (защищенный канал)
+  - `8021/tcp` - Event Socket (ESL) для управления через API
+  - `16384-32768/udp` - RTP порты (расширенный диапазон)
+- **Функции:**
+  - Продвинутая SIP маршрутизация и обработка звонков
+  - Конференц-связь (conference bridges)
+  - IVR и голосовая почта
+  - Запись звонков с высоким качеством
+  - Call Center функционал
+  - Поддержка современных кодеков (OPUS, G.722, G.729, Silk)
+  - Lua скрипты для гибкой логики звонков
+  - Интеграция с PostgreSQL для хранения данных
+  - Event Socket для внешнего управления и интеграции
+  - Масштабируемость и высокая производительность
+- **Конфигурация:** `config/sip/freeswitch/`
+- **ESL:** Event Socket Library для интеграции с VSS сервисами
+- **Преимущества:**
+  - Отличная производительность при большой нагрузке
+  - Гибкая XML конфигурация
+  - Поддержка многих протоколов (SIP, H.323, WebRTC)
+  - Встроенная поддержка русского языка (mod_say_ru)
+
 ---
 
 ### Remote Access & Device Management
@@ -381,9 +409,12 @@ VSS (Virtual System Stack) - комплексная телекоммуникац
 - `5038` - Asterisk AMI
 - `5060` - Kamailio SIP
 - `5061` - Asterisk SIP
+- `5080` - FreeSWITCH SIP (UDP/TCP)
+- `5081` - FreeSWITCH SIP TLS
 - `5432` - PostgreSQL
 - `5672` - RabbitMQ AMQP
 - `6379` - Redis
+- `8021` - FreeSWITCH Event Socket (ESL)
 - `8080` - Guacamole
 - `8081` - VSS POINT
 - `8082` - VSS DCI
@@ -391,7 +422,8 @@ VSS (Virtual System Stack) - комплексная телекоммуникац
 - `8085` - NGINX RTMP HLS
 - `9090` - Prometheus
 - `15672` - RabbitMQ Management
-- `10000-20000` - RTP порты
+- `10000-20000` - RTP порты (Asterisk)
+- `16384-32768` - RTP порты (FreeSWITCH)
 
 ---
 
@@ -519,6 +551,7 @@ VSS (Virtual System Stack) - комплексная телекоммуникац
 - `config/rabbitmq/` - Конфигурация RabbitMQ
 - `config/sip/kamailio/` - Конфигурация Kamailio
 - `config/sip/asterisk/` - Конфигурация Asterisk
+- `config/sip/freeswitch/` - Конфигурация FreeSWITCH
 - `config/nginx/` - Конфигурация NGINX
 - `config/prometheus/` - Конфигурация Prometheus
 - `config/grafana/` - Конфигурация Grafana

@@ -280,6 +280,48 @@ services:
       start_period: 40s
     restart: unless-stopped
 
+  # SIP Trunk Service - FreeSWITCH (Production Ready)
+  freeswitch:
+    build:
+      context: .
+      dockerfile: services/freeswitch/Dockerfile
+    container_name: vss-freeswitch
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=vss_db
+      - POSTGRES_USER=vss
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-vss_postgres_pass}
+      - FREESWITCH_PASSWORD=${FREESWITCH_PASSWORD:-ClueCon}
+      - PROVIDER_HOST=${PROVIDER_HOST:-}
+      - PROVIDER_PORT=${PROVIDER_PORT:-5060}
+    ports:
+      - "5080:5080/udp"      # SIP UDP
+      - "5080:5080/tcp"      # SIP TCP
+      - "5081:5081/tcp"      # SIP TLS
+      - "8021:8021/tcp"      # Event Socket для управления
+      - "16384-32768:16384-32768/udp"  # RTP ports для FreeSWITCH
+    volumes:
+      - ./config/sip/freeswitch:/etc/freeswitch:ro
+      - freeswitch_logs:/var/log/freeswitch
+      - freeswitch_db:/var/lib/freeswitch/db
+      - freeswitch_storage:/var/lib/freeswitch/storage
+      - freeswitch_recordings:/var/lib/freeswitch/recordings
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kamailio:
+        condition: service_started
+    networks:
+      - vss-network
+    healthcheck:
+      test: ["CMD", "fs_cli", "-x", "status", "-p", "${FREESWITCH_PASSWORD:-ClueCon}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
   # Custom Guacamole
   guacd:
     image: guacamole/guacd:1.5.0
@@ -340,6 +382,7 @@ services:
       - vss-guacamole
       - kamailio
       - asterisk
+      - freeswitch
       - nginx-rtmp
     networks:
       - vss-network
@@ -393,6 +436,10 @@ volumes:
   asterisk_lib:
   kamailio_logs:
   kamailio_run:
+  freeswitch_logs:
+  freeswitch_db:
+  freeswitch_storage:
+  freeswitch_recordings:
 
 networks:
   vss-network:
