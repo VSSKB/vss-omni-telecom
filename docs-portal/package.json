@@ -1,0 +1,17 @@
+{
+  "name": "vss-docs-portal",
+  "version": "1.0.0",
+  "description": "VSS OMNI TELECOM Documentation Portal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "marked": "^11.1.1",
+    "highlight.js": "^11.9.0",
+    "fs-extra": "^11.2.0",
+    "gray-matter": "^4.0.3"
+  }
+}
+

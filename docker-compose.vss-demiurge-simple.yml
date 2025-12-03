@@ -196,6 +196,23 @@ services:
       - vss-network
     restart: unless-stopped
 
+  # Documentation Portal
+  vss-docs:
+    build:
+      context: ./docs-portal
+      dockerfile: Dockerfile
+    container_name: vss-docs-portal
+    environment:
+      - DOCS_PORT=3100
+      - NODE_ENV=production
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./:/project:ro
+    networks:
+      - vss-network
+    restart: unless-stopped
+
   # Frontend Nginx
   nginx:
     image: nginx:alpine

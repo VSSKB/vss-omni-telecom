@@ -2,11 +2,15 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
-# Use npm install instead of npm ci to work without package-lock.json
+# Copy utils directory from root
+COPY utils/ ./utils/
+
+# Install dependencies for DCI service
+COPY services/dci/package*.json ./
 RUN npm install --only=production --no-audit --no-fund
 
-COPY . .
+# Copy DCI application code
+COPY services/dci/ ./
 
 EXPOSE 8082
 

@@ -57,10 +57,12 @@ services:
     volumes:
       - redis_data:/data
       - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-vss_redis_pass}
     networks:
       - vss-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -69,8 +71,8 @@ services:
   # Core Services (OTTB, DCI, POINT, WORKSPACE)
   vss-ottb:
     build:
-      context: ./services/ottb
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/ottb/Dockerfile
     container_name: vss-ottb
     environment:
       - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
@@ -90,12 +92,18 @@ services:
         condition: service_healthy
     networks:
       - vss-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8083/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      start_period: 40s
+      retries: 3
     restart: unless-stopped
 
   vss-dci:
     build:
-      context: ./services/dci
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/dci/Dockerfile
     container_name: vss-dci
     environment:
       - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
@@ -111,14 +119,22 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - vss-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8082/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      start_period: 40s
+      retries: 3
     restart: unless-stopped
 
   vss-point:
     build:
-      context: ./services/point
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/point/Dockerfile
     container_name: vss-point
     environment:
       - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
@@ -139,15 +155,23 @@ services:
         condition: service_healthy
     networks:
       - vss-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8081/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      start_period: 40s
+      retries: 3
     restart: unless-stopped
 
   vss-workspace:
     build:
-      context: ./services/workspace
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/workspace/Dockerfile
     container_name: vss-workspace
     environment:
       - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
+      - POSTGRES_URL=postgresql://vss:${DB_PASSWORD:-vss_postgres_pass}@postgres:5432/vss_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-vss_redis_pass}@redis:6379
       - POINT_URL=http://vss-point:8081
       - DCI_URL=http://vss-dci:8082
       - OTTB_URL=http://vss-ottb:8083
@@ -157,58 +181,90 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - vss-point
-      - vss-dci
-      - vss-ottb
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vss-point:
+        condition: service_started
+      vss-dci:
+        condition: service_started
+      vss-ottb:
+        condition: service_started
     networks:
       - vss-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      start_period: 40s
+      retries: 3
     restart: unless-stopped
 
-  # SIP Trunk Service - Kamailio
+  # SIP Trunk Service - Kamailio (Production Ready)
   kamailio:
-    image: kamailio/kamailio-deb:5.7.0-bullseye
-    # build:
-    #   context: .
-    #   dockerfile: services/kamailio/Dockerfile
+    build:
+      context: .
+      dockerfile: services/kamailio/Dockerfile
     container_name: vss-kamailio
     environment:
       - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
       - POSTGRES_DB=vss_db
       - POSTGRES_USER=vss
       - POSTGRES_PASSWORD=${DB_PASSWORD:-vss_postgres_pass}
+      - KAMAILIO_DEBUG=${KAMAILIO_DEBUG:-3}
+      - KAMAILIO_CHILDREN=${KAMAILIO_CHILDREN:-4}
     ports:
-      - "5060:5060/udp"
-      - "5060:5060/tcp"
+      - "5060:5060/udp"      # SIP UDP
+      - "5060:5060/tcp"      # SIP TCP
     volumes:
-      - ./config/sip/kamailio/kamailio.cfg:/etc/kamailio/kamailio.cfg:ro
+      - ./config/sip/kamailio:/etc/kamailio:ro
+      - kamailio_logs:/var/log/kamailio
+      - kamailio_run:/var/run/kamailio
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - vss-network
+    healthcheck:
+      test: ["CMD", "kamcmd", "core.ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
-  # SIP Trunk Service - Asterisk
+  # SIP Trunk Service - Asterisk (Production Ready)
   asterisk:
-    image: andrius/asterisk:18-current
-    # build:
-    #   context: .
-    #   dockerfile: services/asterisk/Dockerfile
+    build:
+      context: .
+      dockerfile: services/asterisk/Dockerfile
     container_name: vss-asterisk
     environment:
       - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
       - POSTGRES_DB=vss_db
       - POSTGRES_USER=vss
       - POSTGRES_PASSWORD=${DB_PASSWORD:-vss_postgres_pass}
+      - AMI_PASSWORD=${AMI_PASSWORD:-vss_ami_pass}
+      - PROVIDER_HOST=${PROVIDER_HOST:-}
+      - PROVIDER_PORT=${PROVIDER_PORT:-5060}
+      - PROVIDER_DOMAIN=${PROVIDER_DOMAIN:-}
+      - PROVIDER_USER=${PROVIDER_USER:-}
+      - PROVIDER_PASSWORD=${PROVIDER_PASSWORD:-}
     ports:
-      - "5061:5060/udp"
-      - "5061:5060/tcp"
-      - "10000-10099:10000-10099/udp"  # RTP ports
+      - "5061:5060/udp"      # SIP UDP
+      - "5061:5060/tcp"      # SIP TCP
+      - "5038:5038/tcp"      # AMI (Asterisk Manager Interface)
+      - "10000-20000:10000-20000/udp"  # RTP ports (расширенный диапазон)
     volumes:
-      - ./config/sip/asterisk/pjsip.conf:/etc/asterisk/pjsip.conf:ro
-      - ./config/sip/asterisk/extensions.conf:/etc/asterisk/extensions.conf:ro
-      - ./config/sip/asterisk/cdr.conf:/etc/asterisk/cdr.conf:ro
-      - ./config/sip/asterisk/modules.conf:/etc/asterisk/modules.conf:ro
+      - ./config/sip/asterisk:/etc/asterisk:ro
+      - asterisk_logs:/var/log/asterisk
+      - asterisk_spool:/var/spool/asterisk
+      - asterisk_lib:/var/lib/asterisk
     depends_on:
       postgres:
         condition: service_healthy
@@ -216,6 +272,12 @@ services:
         condition: service_started
     networks:
       - vss-network
+    healthcheck:
+      test: ["CMD", "asterisk", "-rx", "core show version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped
 
   # Custom Guacamole
@@ -326,6 +388,11 @@ volumes:
   grafana_data:
   rtmp_recordings:
   rtmp_hls:
+  asterisk_logs:
+  asterisk_spool:
+  asterisk_lib:
+  kamailio_logs:
+  kamailio_run:
 
 networks:
   vss-network:

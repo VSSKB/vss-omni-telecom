@@ -2,10 +2,15 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+# Copy utils directory from root
+COPY utils/ ./utils/
+
+# Install dependencies for WORKSPACE service
+COPY services/workspace/package*.json ./
 RUN npm install --only=production --no-audit --no-fund
 
-COPY . .
+# Copy WORKSPACE application code
+COPY services/workspace/ ./
 
 EXPOSE 3000
 

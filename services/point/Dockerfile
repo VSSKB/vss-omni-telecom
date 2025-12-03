@@ -2,10 +2,15 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+# Copy utils directory from root
+COPY utils/ ./utils/
+
+# Install dependencies for POINT service
+COPY services/point/package*.json ./
 RUN npm install --only=production --no-audit --no-fund
 
-COPY . .
+# Copy POINT application code
+COPY services/point/ ./
 
 EXPOSE 8081
 

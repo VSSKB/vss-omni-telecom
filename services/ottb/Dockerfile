@@ -2,12 +2,15 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
+# Copy utils directory from root
+COPY utils/ ./utils/
+
+# Install dependencies for OTTB service
+COPY services/ottb/package*.json ./
 RUN npm install --only=production --no-audit --no-fund
 
-# Copy application code
-COPY . .
+# Copy OTTB application code
+COPY services/ottb/ ./
 
 # Expose port
 EXPOSE 8083
