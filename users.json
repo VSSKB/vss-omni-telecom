@@ -2,5 +2,9 @@
   "admin": {
     "passwordHash": "$2b$10$J7KnikYFJx.SmzcLGIa8WuYZXTH.0CNhNaV9TEYq9o1rNyvrM8.Hy",
     "createdAt": "2025-10-30T14:12:58.054Z"
+  },
+  "user": {
+    "passwordHash": "$2b$10$OxtchSEkk0aYHw4q.d5KcuYogmH6vV1vdQjE9hKoyOFyCEai78IBm",
+    "createdAt": "2025-12-04T00:03:55.354Z"
   }
 }

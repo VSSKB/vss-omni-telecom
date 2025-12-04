@@ -736,7 +736,7 @@
 
             div.innerHTML = `
                 <input type="text" id="ws-name-${id}" value="${name}" class="form-control me-md-2 mb-2 mb-md-0 flex-grow-1" placeholder="Имя соединения">
-                <input type="text" id="ws-url-${id}" value="${url}" class="form-control me-md-2 mb-2 mb-md-0 flex-grow-1" placeholder="ws://localhost:8181">
+                <input type="text" id="ws-url-${id}" value="${url}" class="form-control me-md-2 mb-2 mb-md-0 flex-grow-1" placeholder="ws://79.137.207.215:8181">
                 <input type="text" id="ws-conf-${id}" value="${defaultConference || ''}" class="form-control me-md-2 mb-2 mb-md-0 flex-grow-1" placeholder="Конференция по умолчанию">
                 <span id="ws-status-${id}" class="badge bg-secondary me-md-2 mb-2 mb-md-0" style="min-width: 100px;">Статус: ${status}</span>
                 <div class="d-flex gap-2">
@@ -794,7 +794,7 @@
             }
         }
 
-        function addWsConnection(name = `Соединение ${wsCounter + 1}`, url = `ws://localhost:${WS_PORT}`, sipAccounts = [], defaultConference = '') {
+        function addWsConnection(name = `Соединение ${wsCounter + 1}`, url = `ws://79.137.207.215:${WS_PORT}`, sipAccounts = [], defaultConference = '') {
             const id = wsCounter++;
             const newConn = { id, name, url, wsInstance: null, status: 'Disconnected', amiStatus: 'Unknown', sipAccounts: sipAccounts, defaultConference: defaultConference };
             wsConnections.push(newConn);
@@ -1028,7 +1028,7 @@
                 wsCounter = wsConnections.length > 0 ? Math.max(...wsConnections.map(c => c.id)) + 1 : 0;
             } else {
                 // Add default connections if no stored data
-                addWsConnection('Сервер 1 (Local)', `ws://localhost:${WS_PORT}`, [], 'myconference'); // Default conference for demo
+                addWsConnection('Сервер 1 (Local)', `ws://79.137.207.215:${WS_PORT}`, [], 'myconference'); // Default conference for demo
                 addWsConnection('Сервер 2 (LAN)', `ws://192.168.1.100:${WS_PORT}`, [], 'myconference');
                 addWsConnection('Сервер 3 (Remote)', `ws://your-remote-server-ip:${WS_PORT}`, [], 'myconference');
             }
