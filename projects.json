@@ -22,10 +22,10 @@
     },
     "settings": {
       "adb": {
-        "enabled": false,
+        "enabled": true,
         "path": "adb.exe",
         "port": 5037,
-        "autoStart": false
+        "autoStart": true
       }
     }
   },

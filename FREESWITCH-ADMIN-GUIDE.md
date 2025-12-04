@@ -405,3 +405,5 @@ docker exec -it vss-freeswitch vi /etc/freeswitch/autoload_configs/modules.conf.
 **Дата**: 2025-12-04  
 **Статус**: ✅ Полностью рабочий
 
+
+
