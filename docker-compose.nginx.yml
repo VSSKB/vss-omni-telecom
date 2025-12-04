@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: vss-nginx-gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./config/nginx/vss-gateway.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./public:/usr/share/nginx/html:ro
+    networks:
+      - vss-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  vss-network:
+    driver: bridge
+    name: vss-omni-telecom_vss-network
+
