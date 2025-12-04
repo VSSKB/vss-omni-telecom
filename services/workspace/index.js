@@ -452,7 +452,7 @@ app.get('/api/crm/notes/:call_id', async (req, res) => {
     } catch (error) {
         const { createSafeErrorResponse } = require('../../utils/error-handler');
         console.error('[WORKSPACE] Error fetching CRM notes:', error);
-        res.status(500).json(createSafeErrorResponse(error, 'CRM_NOTES_FETCH_ERROR', 'WORKSPACE')); message: error.message });
+        res.status(500).json(createSafeErrorResponse(error, 'CRM_NOTES_FETCH_ERROR', 'WORKSPACE'));
     }
 });
 
