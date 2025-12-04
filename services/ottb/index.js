@@ -15,7 +15,24 @@ const app = express();
 const DEFAULT_PORT = parseInt(process.env.PORT) || 8083;
 let PORT = DEFAULT_PORT;
 
-app.use(cors());
+// CORS configuration
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : ['http://localhost', 'http://127.0.0.1', 'http://79.137.207.215'];
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (ALLOWED_ORIGINS.indexOf(origin) !== -1 || ALLOWED_ORIGINS.includes('*')) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Определяем, запущен ли сервис в Docker или локально
@@ -23,9 +40,15 @@ const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv
 const POSTGRES_HOST = isDocker ? 'postgres' : 'localhost';
 const RABBITMQ_HOST = isDocker ? 'rabbitmq' : 'localhost';
 
-// Database connection
-const pool = new Pool({
-    connectionString: process.env.POSTGRES_URL || `postgresql://vss:vss_postgres_pass@${POSTGRES_HOST}:5432/vss_db`,
+// Database connection with retry logic
+const { createPoolWithRetry, initDatabaseWithRetry } = require('../../utils/db-helper');
+
+const pool = createPoolWithRetry({
+    connectionString: process.env.POSTGRES_URL || `postgresql://vss:vss_postgres_pass@${POSTGRES_HOST}:5432/vss_db`
+}, 'OTTB');
+
+initDatabaseWithRetry(pool, 'OTTB').catch(error => {
+    console.error('[OTTB] ❌ Failed to initialize database.');
 });
 
 // JWT Authentication middleware - загружаем права из БД для всех аутентифицированных запросов
@@ -1227,9 +1250,13 @@ async function startServer() {
             PORT = DEFAULT_PORT;
         }
 
-        app.listen(PORT, () => {
+        const server = app.listen(PORT, () => {
             console.log(`VSS OTTB Core service listening on port ${PORT}`);
             console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+            
+            // Graceful shutdown
+            const { setupGracefulShutdown } = require('../../utils/graceful-shutdown');
+            setupGracefulShutdown({ server, pool, rabbitmqConnection: global.rabbitmqConnection }, 'OTTB');
         });
     } catch (error) {
         console.error('❌ [OTTB] Ошибка запуска сервера:', error.message);

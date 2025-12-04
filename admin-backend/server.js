@@ -27,22 +27,32 @@ try {
 const { Adb } = require('@devicefarmer/adbkit');
 
 // --- Конфигурация сервера ---
-const DEFAULT_WEB_PORT = parseInt(process.env.WEB_PORT) || 8181; // Порт для HTTP-сервера и WebSocket внутри контейнера
+const DEFAULT_WEB_PORT = parseInt(process.env.WEB_PORT) || 8094; // Порт для HTTP-сервера (changed from 8181 to avoid conflict)
 let WEB_PORT = DEFAULT_WEB_PORT;
 let serverRestartAttempts = 0;
 const MAX_SERVER_RESTART_ATTEMPTS = 10;
 const SALT_ROUNDS = 10;
 
 // --- Файл конфигурации AMI ---
-const CONFIG_FILE = path.join('/app', 'config.json');
+const IS_DOCKER = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
+const APP_ROOT = IS_DOCKER ? '/app' : __dirname;
+const CONFIG_FILE = path.join(APP_ROOT, 'config.json');
 
 // --- Настройки AMI (загружаются из config.json или переменных окружения) ---
+// SECURITY: No default credentials! Must be set in .env or config.json
 let amiConfig = {
-    host: process.env.AMI_HOST || '213.165.48.17',
-    port: parseInt(process.env.AMI_PORT || '6038'),
-    username: process.env.AMI_USERNAME || 'vss_1',
-    password: process.env.AMI_PASSWORD || 'QmlVdWNndTdRYlk9'
+    host: process.env.AMI_HOST,
+    port: parseInt(process.env.AMI_PORT || '5038'),
+    username: process.env.AMI_USERNAME,
+    password: process.env.AMI_PASSWORD
 };
+
+// Валидация AMI конфигурации
+if (!amiConfig.host || !amiConfig.username || !amiConfig.password) {
+    logger.warn('[AMI] ⚠️  AMI credentials not configured. AMI functionality will be disabled.');
+    logger.warn('[AMI] Set AMI_HOST, AMI_USERNAME, AMI_PASSWORD in .env to enable AMI.');
+    Manager = null;
+}
 
 // Загрузка настроек из файла
 function loadAmiConfig() {

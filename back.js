@@ -23,8 +23,26 @@ const AMI_PORT = process.env.AMI_PORT ? Number(process.env.AMI_PORT) : 5038;
 const AMI_USER = process.env.AMI_USER || 'vss';
 const AMI_PASS = process.env.AMI_PASS || 'UZzdzBjdVZzWms9';
 
-// JWT secret (in production: strong secret, env var)
-const JWT_SECRET = process.env.JWT_SECRET || 'vss_demo_secret_change_me';
+// JWT secret (REQUIRED - no default for security!)
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// Валидация JWT_SECRET при старте
+if (!JWT_SECRET) {
+    console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: JWT_SECRET не установлен!');
+    console.error('   Установите JWT_SECRET в .env файле.');
+    console.error('   Пример генерации: openssl rand -base64 64');
+    console.error('   Или используйте: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'base64\'))"');
+    process.exit(1);
+}
+
+if (JWT_SECRET.length < 32) {
+    console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: JWT_SECRET слишком короткий!');
+    console.error(`   Текущая длина: ${JWT_SECRET.length}, минимум: 32 символа`);
+    console.error('   Используйте более длинный секретный ключ для безопасности.');
+    process.exit(1);
+}
+
+console.log('[AUTH] ✅ JWT_SECRET установлен корректно');
 
 // Files
 const USERS_FILE = path.join(__dirname, 'users.json');

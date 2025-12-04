@@ -14,7 +14,22 @@ const DEFAULT_PORT = parseInt(process.env.PORT) || 8081;
 let PORT = DEFAULT_PORT;
 const JWT_SECRET = process.env.JWT_SECRET || 'vss_jwt_secret_change_me';
 
-app.use(cors());
+// CORS configuration
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : ['http://localhost', 'http://127.0.0.1', 'http://79.137.207.215'];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (ALLOWED_ORIGINS.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+}));
 app.use(express.json());
 
 // Определяем, запущен ли сервис в Docker или локально
@@ -22,9 +37,15 @@ const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv
 const POSTGRES_HOST = isDocker ? 'postgres' : 'localhost';
 const RABBITMQ_HOST = isDocker ? 'rabbitmq' : 'localhost';
 
-// Database connection
-const pool = new Pool({
-    connectionString: process.env.POSTGRES_URL || `postgresql://vss:vss_postgres_pass@${POSTGRES_HOST}:5432/vss_db`,
+// Database connection with retry logic
+const { createPoolWithRetry, initDatabaseWithRetry } = require('../../utils/db-helper');
+
+const pool = createPoolWithRetry({
+    connectionString: process.env.POSTGRES_URL || `postgresql://vss:vss_postgres_pass@${POSTGRES_HOST}:5432/vss_db`
+}, 'POINT');
+
+initDatabaseWithRetry(pool, 'POINT').catch(error => {
+    console.error('[POINT] ❌ Failed to initialize database.');
 });
 
 // Redis connection (for ACL cache)
@@ -76,7 +97,8 @@ app.get('/health', (req, res) => {
 // ============================================
 
 // POST /api/auth/login - Вход в систему
-app.post('/api/auth/login', async (req, res) => {
+const { validate, loginSchema } = require('../../utils/validation');
+app.post('/api/auth/login', validate(loginSchema, 'body'), async (req, res) => {
     try {
         const { username, password } = req.body;
         
@@ -382,8 +404,12 @@ async function startServer() {
             PORT = DEFAULT_PORT;
         }
 
-        app.listen(PORT, () => {
+        const server = app.listen(PORT, () => {
             console.log(`VSS POINT service listening on port ${PORT}`);
+            
+            // Graceful shutdown
+            const { setupGracefulShutdown } = require('../../utils/graceful-shutdown');
+            setupGracefulShutdown({ server, pool }, 'POINT');
         });
     } catch (error) {
         console.error('❌ [POINT] Ошибка запуска сервера:', error.message);

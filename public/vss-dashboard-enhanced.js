@@ -5,31 +5,18 @@
 
 class VSSEnhancedUI {
     constructor() {
-        // Определяем базовые URL для API
-        const origin = window.location.origin;
+        // Определяем базовые URL для API динамически
         const protocol = window.location.protocol;
         const hostname = window.location.hostname;
         
-        // Если работаем через прокси (nginx), используем тот же хост с разными портами
-        // Иначе используем localhost
-        const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '';
-        
-        if (isLocalhost) {
-            this.apiBase = {
-                ottb: 'http://localhost:8083',
-                dci: 'http://localhost:8082',
-                point: 'http://localhost:8081',
-                workspace: 'http://localhost:3000'
-            };
-        } else {
-            // В продакшене используем тот же хост с разными портами или поддоменами
-            this.apiBase = {
-                ottb: `${protocol}//${hostname}:8083`,
-                dci: `${protocol}//${hostname}:8082`,
-                point: `${protocol}//${hostname}:8081`,
-                workspace: `${protocol}//${hostname}:3000`
-            };
-        }
+        // ВСЕГДА используем текущий hostname (автоматически работает с любым IP/доменом)
+        this.apiBase = {
+            ottb: `${protocol}//${hostname}:8083`,
+            dci: `${protocol}//${hostname}:8082`,
+            point: `${protocol}//${hostname}:8081`,
+            workspace: `${protocol}//${hostname}:3000`,
+            workspace_alt: `${protocol}//${hostname}:3001`  // Альтернативный порт если 3000 занят
+        };
         this.authToken = localStorage.getItem('vss_auth_token');
         this.userRole = localStorage.getItem('vss_user_role') || 'viewer';
         this.wsConnection = null;

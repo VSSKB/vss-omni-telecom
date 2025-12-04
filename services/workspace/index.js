@@ -23,7 +23,29 @@ const io = new Server(server, {
 const DEFAULT_PORT = parseInt(process.env.PORT) || 3000;
 let PORT = DEFAULT_PORT;
 
-app.use(cors());
+// CORS configuration - only allow specific origins in production
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : ['http://localhost', 'http://127.0.0.1', 'http://79.137.207.215'];
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, Postman, etc)
+        if (!origin) return callback(null, true);
+        
+        if (ALLOWED_ORIGINS.indexOf(origin) !== -1 || ALLOWED_ORIGINS.includes('*')) {
+            callback(null, true);
+        } else {
+            console.warn(`[WORKSPACE] ⚠️  CORS blocked origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Определяем, запущен ли сервис в Docker или локально
@@ -31,9 +53,17 @@ const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv
 const RABBITMQ_HOST = isDocker ? 'rabbitmq' : 'localhost';
 const POSTGRES_HOST = isDocker ? 'postgres' : 'localhost';
 
-// Database connection
-const pool = new Pool({
-    connectionString: process.env.POSTGRES_URL || `postgresql://vss:vss_postgres_pass@${POSTGRES_HOST}:5432/vss_db`,
+// Database connection with retry logic
+const { createPoolWithRetry, initDatabaseWithRetry } = require('../../utils/db-helper');
+
+const pool = createPoolWithRetry({
+    connectionString: process.env.POSTGRES_URL || `postgresql://vss:vss_postgres_pass@${POSTGRES_HOST}:5432/vss_db`
+}, 'WORKSPACE');
+
+// Initialize database connection with retry
+initDatabaseWithRetry(pool, 'WORKSPACE').catch(error => {
+    console.error('[WORKSPACE] ❌ Failed to initialize database. Service will start but may not function correctly.');
+    // Don't exit - allow service to start and retry later
 });
 
 // JWT Authentication middleware - загружаем права из БД для всех аутентифицированных запросов
@@ -420,8 +450,9 @@ app.get('/api/crm/notes/:call_id', async (req, res) => {
         const notes = leadResult.rows[0].metadata?.notes || [];
         res.json({ notes: notes });
     } catch (error) {
+        const { createSafeErrorResponse } = require('../../utils/error-handler');
         console.error('[WORKSPACE] Error fetching CRM notes:', error);
-        res.status(500).json({ error: true, code: 'CRM_NOTES_FETCH_ERROR', message: error.message });
+        res.status(500).json(createSafeErrorResponse(error, 'CRM_NOTES_FETCH_ERROR', 'WORKSPACE')); message: error.message });
     }
 });
 
@@ -489,13 +520,15 @@ app.get('/api/crm/leads', authenticateToken, async (req, res) => {
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error) {
+        const { createSafeErrorResponse } = require('../../utils/error-handler');
         console.error('[WORKSPACE] Error fetching CRM leads:', error);
-        res.status(500).json({ error: true, code: 'CRM_LEADS_FETCH_ERROR', message: error.message });
+        res.status(500).json(createSafeErrorResponse(error, 'CRM_LEADS_FETCH_ERROR', 'WORKSPACE'));
     }
 });
 
 // POST /api/crm/leads - Создание нового лида
-app.post('/api/crm/leads', authenticateToken, async (req, res) => {
+const { validate, createLeadSchema } = require('../../utils/validation');
+app.post('/api/crm/leads', authenticateToken, validate(createLeadSchema, 'body'), async (req, res) => {
     try {
         // Проверка прав доступа к CRM
         if (!req.user.permissions) {
@@ -1415,6 +1448,14 @@ async function startServer() {
         server.listen(PORT, () => {
             console.log(`VSS Workspace service listening on port ${PORT}`);
             console.log(`WebSocket server ready`);
+            
+            // Setup graceful shutdown
+            const { setupGracefulShutdown } = require('../../utils/graceful-shutdown');
+            setupGracefulShutdown({
+                server,
+                pool,
+                rabbitmqConnection: global.rabbitmqConnection
+            }, 'WORKSPACE');
         });
     } catch (error) {
         console.error('❌ [WORKSPACE] Ошибка запуска сервера:', error.message);

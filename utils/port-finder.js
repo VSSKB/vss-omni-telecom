@@ -99,7 +99,7 @@ async function isPortFullyAvailable(port) {
  * @returns {Promise<number>} - Свободный порт
  * @throws {Error} - Если не удалось найти свободный порт
  */
-async function findAvailablePort(startPort = 3000, maxAttempts = 100, checkDocker = true) {
+async function findAvailablePort(startPort = 3000, maxAttempts = 100, checkDocker = false) {
     // Ограничиваем максимальный порт значением 65535
     const maxPort = Math.min(startPort + maxAttempts - 1, 65535);
     const actualMaxAttempts = maxPort - startPort + 1;
@@ -112,16 +112,10 @@ async function findAvailablePort(startPort = 3000, maxAttempts = 100, checkDocke
             continue;
         }
         
-        if (checkDocker) {
-            const available = await isPortFullyAvailable(port);
-            if (available) {
-                return port;
-            }
-        } else {
-            const available = await isPortAvailable(port);
-            if (available) {
-                return port;
-            }
+        // На Windows используем только базовую проверку через net
+        const available = await isPortAvailable(port);
+        if (available) {
+            return port;
         }
     }
     
