@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FreeSWITCH Web Admin - VSS OMNI TELECOM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .status-connected {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-disconnected {
+            background: #ef4444;
+            color: white;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .stat:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            color: #1f2937;
+            font-weight: bold;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: #10b981;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .input-group {
+            margin: 15px 0;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #374151;
+            font-weight: 500;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        tr:hover {
+            background: #f9fafb;
+        }
+
+        .console {
+            background: #1f2937;
+            color: #10b981;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .command-input {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .command-input input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #374151;
+            border-radius: 8px;
+            background: #374151;
+            color: white;
+            font-family: 'Courier New', monospace;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #667eea;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(102, 126, 234, 0.3);
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 0.6s linear infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📞 FreeSWITCH Web Admin</h1>
+            <p style="color: #6b7280; margin: 10px 0;">VSS OMNI TELECOM - Telephony Management</p>
+            <div id="connectionStatus" class="status-badge status-disconnected">
+                🔴 Disconnected
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>📊 System Status</h2>
+                <div id="systemStats">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📞 Active Calls</h2>
+                <div id="callsCount" class="stat">
+                    <span class="stat-label">Current Calls:</span>
+                    <span class="stat-value">0</span>
+                </div>
+                <button class="btn" onclick="refreshCalls()">🔄 Refresh</button>
+            </div>
+
+            <div class="card">
+                <h2>👥 Registrations</h2>
+                <div id="registrationsCount" class="stat">
+                    <span class="stat-label">Registered Users:</span>
+                    <span class="stat-value">0</span>
+                </div>
+                <button class="btn" onclick="refreshRegistrations()">🔄 Refresh</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('calls')">📞 Calls</div>
+            <div class="tab" onclick="switchTab('registrations')">👥 Registrations</div>
+            <div class="tab" onclick="switchTab('originate')">📲 Make Call</div>
+            <div class="tab" onclick="switchTab('console')">💻 Console</div>
+            <div class="tab" onclick="switchTab('sofia')">🔧 Sofia Status</div>
+        </div>
+
+        <div id="calls" class="card tab-content active">
+            <h2>Active Calls</h2>
+            <div id="callsList">
+                <div class="empty-state">No active calls</div>
+            </div>
+        </div>
+
+        <div id="registrations" class="card tab-content">
+            <h2>SIP Registrations</h2>
+            <div id="registrationsList">
+                <div class="empty-state">No registrations</div>
+            </div>
+        </div>
+
+        <div id="originate" class="card tab-content">
+            <h2>Originate Call</h2>
+            <div class="input-group">
+                <label>From (Extension):</label>
+                <input type="text" id="callFrom" placeholder="1000">
+            </div>
+            <div class="input-group">
+                <label>To (Extension):</label>
+                <input type="text" id="callTo" placeholder="1001">
+            </div>
+            <button class="btn btn-success" onclick="makeCall()">📞 Make Call</button>
+        </div>
+
+        <div id="console" class="card tab-content">
+            <h2>FreeSWITCH Console</h2>
+            <div class="console" id="consoleOutput">
+FreeSWITCH Console Ready...
+Type commands below and press Enter or click Execute.
+
+Common commands:
+  status                  - Show system status
+  show channels           - Show active channels
+  show registrations      - Show SIP registrations
+  reloadxml               - Reload XML configuration
+  sofia status            - Show Sofia-SIP status
+            </div>
+            <div class="command-input">
+                <input type="text" id="commandInput" placeholder="Enter FreeSWITCH command..." 
+                       onkeypress="if(event.key==='Enter') executeCommand()">
+                <button class="btn" onclick="executeCommand()">Execute</button>
+                <button class="btn btn-danger" onclick="clearConsole()">Clear</button>
+            </div>
+        </div>
+
+        <div id="sofia" class="card tab-content">
+            <h2>Sofia-SIP Status</h2>
+            <button class="btn" onclick="refreshSofia()">🔄 Refresh Status</button>
+            <div class="console" id="sofiaStatus" style="margin-top: 15px;">
+Click "Refresh Status" to load Sofia-SIP information...
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
+

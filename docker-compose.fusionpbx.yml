@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for FusionPBX
+  fusionpbx-db:
+    image: postgres:15-alpine
+    container_name: fusionpbx-db
+    environment:
+      POSTGRES_USER: fusionpbx
+      POSTGRES_PASSWORD: fusionpbx_secure_pass_2024
+      POSTGRES_DB: fusionpbx
+    volumes:
+      - fusionpbx_db_data:/var/lib/postgresql/data
+    networks:
+      - fusionpbx-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fusionpbx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FreeSWITCH integrated with FusionPBX
+  fusionpbx-freeswitch:
+    image: fusionpbx/freeswitch:latest
+    container_name: fusionpbx-freeswitch
+    environment:
+      - POSTGRES_HOST=fusionpbx-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=fusionpbx
+      - POSTGRES_PASSWORD=fusionpbx_secure_pass_2024
+      - POSTGRES_DATABASE=fusionpbx
+    ports:
+      - "5060:5060/tcp"
+      - "5060:5060/udp"
+      - "5080:5080/tcp"
+      - "5080:5080/udp"
+      - "8021:8021/tcp"
+      - "16384-16394:16384-16394/udp"
+      - "5066:5066/tcp"
+      - "7443:7443/tcp"
+    volumes:
+      - fusionpbx_freeswitch_sounds:/usr/share/freeswitch/sounds
+      - fusionpbx_freeswitch_recordings:/var/lib/freeswitch/recordings
+      - fusionpbx_freeswitch_storage:/var/lib/freeswitch/storage
+    networks:
+      - fusionpbx-network
+    depends_on:
+      fusionpbx-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # FusionPBX Web Interface
+  fusionpbx:
+    image: fusionpbx/fusionpbx:latest
+    container_name: fusionpbx
+    environment:
+      - POSTGRES_HOST=fusionpbx-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=fusionpbx
+      - POSTGRES_PASSWORD=fusionpbx_secure_pass_2024
+      - POSTGRES_DATABASE=fusionpbx
+      - FREESWITCH_HOST=fusionpbx-freeswitch
+      - FREESWITCH_PASSWORD=ClueCon
+    ports:
+      - "8089:80"
+      - "8443:443"
+    volumes:
+      - fusionpbx_data:/var/www/fusionpbx
+    networks:
+      - fusionpbx-network
+    depends_on:
+      - fusionpbx-db
+      - fusionpbx-freeswitch
+    restart: unless-stopped
+
+networks:
+  fusionpbx-network:
+    driver: bridge
+    name: fusionpbx-network
+
+volumes:
+  fusionpbx_db_data:
+    driver: local
+  fusionpbx_freeswitch_sounds:
+    driver: local
+  fusionpbx_freeswitch_recordings:
+    driver: local
+  fusionpbx_freeswitch_storage:
+    driver: local
+  fusionpbx_data:
+    driver: local
+

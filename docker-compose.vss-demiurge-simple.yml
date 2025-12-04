@@ -73,8 +73,8 @@ services:
   # Core Services (OTTB, DCI, POINT, WORKSPACE)
   vss-ottb:
     build:
-      context: .
-      dockerfile: services/ottb/Dockerfile
+      context: ./services/ottb
+      dockerfile: Dockerfile
     container_name: vss-ottb
     environment:
       - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
@@ -98,8 +98,8 @@ services:
 
   vss-dci:
     build:
-      context: .
-      dockerfile: services/dci/Dockerfile
+      context: ./services/dci
+      dockerfile: Dockerfile
     container_name: vss-dci
     environment:
       - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
@@ -121,8 +121,8 @@ services:
 
   vss-point:
     build:
-      context: .
-      dockerfile: services/point/Dockerfile
+      context: ./services/point
+      dockerfile: Dockerfile
     container_name: vss-point
     environment:
       - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss
@@ -147,8 +147,8 @@ services:
 
   vss-workspace:
     build:
-      context: .
-      dockerfile: services/workspace/Dockerfile
+      context: ./services/workspace
+      dockerfile: Dockerfile
     container_name: vss-workspace
     environment:
       - RABBITMQ_URL=amqp://vss-admin:${RABBITMQ_PASSWORD:-vss_rabbit_pass}@rabbitmq:5672/vss

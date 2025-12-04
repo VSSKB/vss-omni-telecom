@@ -30,91 +30,25 @@
     }
   },
   {
-    "id": "89ca4114-f2a3-434f-9ee4-f41524672af0",
-    "name": "v01",
-    "path": "C:\\Users\\Administrator\\Documents\\vss-omni-telecom\\projects\\89ca4114-f2a3-434f-9ee4-f41524672af0",
-    "status": "stopped",
+    "id": "3fae3921-7cdd-4093-82e0-cf180069e88c",
+    "name": "v00002",
+    "path": "C:\\Users\\Administrator\\Documents\\vss-omni-telecom\\projects\\3fae3921-7cdd-4093-82e0-cf180069e88c",
+    "status": "running",
     "ports": {
-      "nginx": 3232,
-      "backend": 3200,
-      "frontend": 3201,
-      "mikopbx": 3202,
-      "db": 58395,
-      "rabbitmq": 42212,
-      "rabbitmqMgmt": 37747
+      "nginx": 8080,
+      "backend": 3333,
+      "frontend": 3334,
+      "mikopbx": 3335,
+      "db": 27765,
+      "rabbitmq": 31600,
+      "rabbitmqMgmt": 32622
     },
     "includeMikopbx": true,
     "includePostgres": true,
     "db": {
-      "dbName": "vss_db_icn7",
-      "dbUser": "user_dku",
-      "dbPort": 58395
-    }
-  },
-  {
-    "id": "19f7ba3d-a42b-4cc0-9849-2ef475af4240",
-    "name": "v01",
-    "path": "C:\\Users\\Administrator\\Documents\\vss-omni-telecom\\projects\\19f7ba3d-a42b-4cc0-9849-2ef475af4240",
-    "status": "stopped",
-    "ports": {
-      "nginx": 3232,
-      "backend": 3200,
-      "frontend": 3201,
-      "mikopbx": 3202,
-      "db": 31089,
-      "rabbitmq": 31046,
-      "rabbitmqMgmt": 19553
-    },
-    "includeMikopbx": true,
-    "includePostgres": true,
-    "db": {
-      "dbName": "vss_db_icn7",
-      "dbUser": "user_dku",
-      "dbPort": 31089
-    }
-  },
-  {
-    "id": "74fdcd48-853e-4301-aa6f-061b2e9b67ae",
-    "name": "v01",
-    "path": "C:\\Users\\Administrator\\Documents\\vss-omni-telecom\\projects\\74fdcd48-853e-4301-aa6f-061b2e9b67ae",
-    "status": "stopped",
-    "ports": {
-      "nginx": 3232,
-      "backend": 3200,
-      "frontend": 3201,
-      "mikopbx": 3202,
-      "db": 24521,
-      "rabbitmq": 25530,
-      "rabbitmqMgmt": 26596
-    },
-    "includeMikopbx": true,
-    "includePostgres": true,
-    "db": {
-      "dbName": "vss_db_icn7",
-      "dbUser": "user_dku",
-      "dbPort": 24521
-    }
-  },
-  {
-    "id": "9820ce39-d11f-460b-bb71-1c6a4c5b3bcf",
-    "name": "v01",
-    "path": "C:\\Users\\Administrator\\Documents\\vss-omni-telecom\\projects\\9820ce39-d11f-460b-bb71-1c6a4c5b3bcf",
-    "status": "stopped",
-    "ports": {
-      "nginx": 3232,
-      "backend": 3200,
-      "frontend": 3201,
-      "mikopbx": 3202,
-      "db": 59977,
-      "rabbitmq": 50935,
-      "rabbitmqMgmt": 18307
-    },
-    "includeMikopbx": true,
-    "includePostgres": true,
-    "db": {
-      "dbName": "vss_db_icn7",
-      "dbUser": "user_dku",
-      "dbPort": 59977
+      "dbName": "vss_db_swvb",
+      "dbUser": "user_nbu",
+      "dbPort": 27765
     }
   }
 ]
