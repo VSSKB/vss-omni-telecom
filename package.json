@@ -2,7 +2,21 @@
   "name": "install-wizard",
   "version": "1.0.0",
   "description": "Web-based installer wizard for Asterisk application.",
+  "homepage": "https://github.com/VSSKB/vss-omni-telecom#readme",
+  "bugs": {
+    "url": "https://github.com/VSSKB/vss-omni-telecom/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VSSKB/vss-omni-telecom.git"
+  },
+  "license": "ISC",
+  "author": "Your Name",
+  "type": "commonjs",
   "main": "server.js",
+  "directories": {
+    "doc": "docs"
+  },
   "scripts": {
     "start": "node server.js",
     "start:install-wizard": "node server.js",
@@ -35,8 +49,6 @@
     "sqlite3": "^5.1.7",
     "uuid": "^11.1.0"
   },
-  "author": "Your Name",
-  "license": "ISC",
   "devDependencies": {
     "concurrently": "^9.2.1"
   }
