@@ -187,7 +187,7 @@ function Show-Logs {
     }
 }
 
-function Clean-Infrastructure {
+function Clear-Infrastructure {
     Show-Banner
     Write-Host "⚠️  ВНИМАНИЕ: Это удалит все контейнеры и данные!" -ForegroundColor Red
     Write-Host ""
@@ -280,7 +280,7 @@ switch ($Command.ToLower()) {
         Rebuild-Infrastructure 
     }
     'clean' { 
-        Clean-Infrastructure 
+        Clear-Infrastructure 
     }
     'open' { 
         Open-Interfaces 
