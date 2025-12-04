@@ -145,7 +145,7 @@ function Restart-Infrastructure {
     Write-Host ""
 }
 
-function Rebuild-Infrastructure {
+function Update-Infrastructure {
     Show-Banner
     Write-Host "🔨 Пересборка и запуск инфраструктуры..." -ForegroundColor Magenta
     Write-Host ""
@@ -187,7 +187,7 @@ function Show-Logs {
     }
 }
 
-function Clear-Infrastructure {
+function Remove-Infrastructure {
     Show-Banner
     Write-Host "⚠️  ВНИМАНИЕ: Это удалит все контейнеры и данные!" -ForegroundColor Red
     Write-Host ""
@@ -277,10 +277,10 @@ switch ($Command.ToLower()) {
         Show-Logs -ServiceName $Service 
     }
     'rebuild' { 
-        Rebuild-Infrastructure 
+        Update-Infrastructure 
     }
     'clean' { 
-        Clear-Infrastructure 
+        Remove-Infrastructure 
     }
     'open' { 
         Open-Interfaces 
