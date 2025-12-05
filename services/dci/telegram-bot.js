@@ -234,40 +234,19 @@ class TelegramBotManager {
                         }
                     } catch (dbError) {
                         console.error('[Telegram Bot] Database query error:', dbError.message);
-                        // Более понятное сообщение об ошибке
-                        let errorMsg = dbError.message || 'Неизвестная ошибка';
-                        if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('connect')) {
-                            dbStatus = '❌ Недоступна (сервис не запущен)';
-                        } else if (errorMsg.includes('timeout')) {
-                            dbStatus = '⏱️ Таймаут подключения';
-                        } else if (errorMsg.includes('password') || errorMsg.includes('authentication')) {
-                            dbStatus = '❌ Ошибка аутентификации';
-                        } else {
-                            dbStatus = `❌ Ошибка: ${errorMsg.substring(0, 40)}...`;
-                        }
+                        dbStatus = `ошибка: ${dbError.message.substring(0, 30)}...`;
                     }
                 } else {
                     dbStatus = 'не инициализирована';
                 }
 
-                let statusMessage = 
+                const statusMessage = 
                     `📊 *Статус VSS DCI*\n\n` +
-                    `📦 База данных: ${dbStatus}\n` +
+                    `✅ База данных: ${dbStatus}\n` +
                     `🔄 Активных пайплайнов: ${activePipelines}\n` +
                     `⏰ Время сервера: ${serverTime}\n` +
-                    `🤖 Бот: ${this.isConnected ? '✅ подключен' : '❌ отключен'}\n` +
-                    `📡 RabbitMQ: ${this.rabbitmqChannel ? '✅ подключен' : '❌ не подключен'}`;
-
-                // Добавляем инструкции, если что-то не работает
-                if (dbStatus.includes('❌') || dbStatus.includes('Недоступна')) {
-                    statusMessage += `\n\n*💡 Для запуска PostgreSQL:*\n`;
-                    statusMessage += `\`docker-compose -f docker-compose.vss-demiurge-simple.yml up -d postgres\``;
-                }
-                
-                if (!this.rabbitmqChannel) {
-                    statusMessage += `\n\n*💡 Для запуска RabbitMQ:*\n`;
-                    statusMessage += `\`docker-compose -f docker-compose.vss-demiurge-simple.yml up -d rabbitmq\``;
-                }
+                    `🤖 Бот: ${this.isConnected ? 'подключен' : 'отключен'}\n` +
+                    `📡 RabbitMQ: ${this.rabbitmqChannel ? 'подключен' : 'не подключен'}`;
 
                 await this.bot.sendMessage(chatId, statusMessage, { parse_mode: 'Markdown' });
                 this.publishEvent('telegram.command.status', { chat_id: chatId });
