@@ -49,6 +49,14 @@
       "dbName": "vss_db_swvb",
       "dbUser": "user_nbu",
       "dbPort": 27765
+    },
+    "settings": {
+      "adb": {
+        "enabled": true,
+        "path": "adb.exe",
+        "port": 5037,
+        "autoStart": true
+      }
     }
   }
 ]

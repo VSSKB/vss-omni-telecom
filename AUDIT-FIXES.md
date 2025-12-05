@@ -21,6 +21,7 @@
 **Проблема:** В frontend использовались методы `startRtmpStream` и `stopRtmpStream`, но соответствующие POST endpoints отсутствовали в backend.
 
 **Исправление:** Добавлены в `services/workspace/index.js`:
+
 - `POST /api/rtmp/stream/:slot_id/start` - запуск RTMP потока
 - `POST /api/rtmp/stream/:slot_id/stop` - остановка RTMP потока
 
