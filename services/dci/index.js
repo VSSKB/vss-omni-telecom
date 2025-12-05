@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const net = require('net');
 const fs = require('fs');
 const SlotEngine = require('./slot-engine');
+const TelegramBotManager = require('./telegram-bot');
 const { findAvailablePort } = require('../../utils/port-finder');
 require('dotenv').config();
 
@@ -53,6 +54,9 @@ let rabbitmqConnection = null;
 
 // Slot engines cache (вынесен на уровень модуля для доступа из всех функций)
 const slotEngines = new Map();
+
+// Telegram Bot Manager
+let telegramBot = null;
 
 const initRabbitMQ = async () => {
     try {
@@ -175,8 +179,24 @@ const initRabbitMQ = async () => {
         });
         
         console.log('[DCI] Connected to RabbitMQ and configured F-Flow queues');
+        
+        // Инициализируем Telegram Bot Manager с RabbitMQ каналом
+        if (!telegramBot) {
+            telegramBot = new TelegramBotManager(pool, rabbitmqChannel);
+        } else {
+            // Обновляем канал если бот уже инициализирован
+            telegramBot.rabbitmqChannel = rabbitmqChannel;
+        }
     } catch (error) {
         console.error('[DCI] RabbitMQ connection error:', error.message);
+        console.error('[DCI] RabbitMQ недоступен. Сервис будет работать без RabbitMQ.');
+        console.error('[DCI] Для запуска RabbitMQ выполните: docker run -d --name rabbitmq-local -p 5672:5672 -p 15672:15672 -e RABBITMQ_DEFAULT_USER=vss-admin -e RABBITMQ_DEFAULT_PASS=vss_rabbit_pass -e RABBITMQ_DEFAULT_VHOST=/vss rabbitmq:3.12-management-alpine');
+        
+        // Пытаемся переподключиться через 30 секунд
+        setTimeout(() => {
+            console.log('[DCI] Попытка переподключения к RabbitMQ...');
+            initRabbitMQ();
+        }, 30000);
     }
 };
 
@@ -384,10 +404,148 @@ app.post('/api/dci/log-event', async (req, res) => {
             VALUES ($1, $2, $3, $4, $5)
         `, [module, severity, message, context || {}, user_id || null]);
         
+        // Отправляем уведомление в Telegram если бот подключен и это критичное событие
+        if (telegramBot && telegramBot.isConnected && (severity === 'error' || severity === 'critical')) {
+            try {
+                await telegramBot.sendMessage(
+                    `⚠️ *${module.toUpperCase()}*\n\n` +
+                    `*${severity.toUpperCase()}*: ${message}\n` +
+                    (context ? `\nКонтекст: \`${JSON.stringify(context)}\`` : ''),
+                    null,
+                    { parse_mode: 'Markdown' }
+                );
+            } catch (tgError) {
+                console.error('[DCI] Error sending Telegram notification:', tgError);
+            }
+        }
+        
         res.json({ status: 'logged' });
     } catch (error) {
         console.error('[DCI] Error logging event:', error);
         res.status(500).json({ error: true, code: 'LOG_EVENT_ERROR', message: error.message });
+    }
+});
+
+// ============================================
+// TELEGRAM BOT API
+// ============================================
+
+// POST /api/dci/telegram/connect - Подключение к Telegram боту
+app.post('/api/dci/telegram/connect', async (req, res) => {
+    try {
+        const { bot_token, chat_id } = req.body;
+        
+        if (!bot_token) {
+            return res.status(400).json({ 
+                error: true, 
+                code: 'INVALID_PARAMS', 
+                message: 'bot_token is required' 
+            });
+        }
+
+        if (!telegramBot) {
+            telegramBot = new TelegramBotManager(pool, rabbitmqChannel);
+        }
+
+        const result = await telegramBot.connect(bot_token, chat_id || null);
+        res.json(result);
+    } catch (error) {
+        console.error('[DCI] Error connecting Telegram bot:', error);
+        console.error('[DCI] Error stack:', error.stack);
+        const errorMessage = error.message || 'Unknown error';
+        res.status(500).json({ 
+            error: true, 
+            code: 'TELEGRAM_CONNECT_ERROR', 
+            message: errorMessage,
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
+
+// POST /api/dci/telegram/disconnect - Отключение от Telegram бота
+app.post('/api/dci/telegram/disconnect', async (req, res) => {
+    try {
+        if (!telegramBot) {
+            return res.status(400).json({ 
+                error: true, 
+                code: 'BOT_NOT_INITIALIZED', 
+                message: 'Telegram bot is not initialized' 
+            });
+        }
+
+        const result = await telegramBot.disconnect();
+        res.json(result);
+    } catch (error) {
+        console.error('[DCI] Error disconnecting Telegram bot:', error);
+        res.status(500).json({ 
+            error: true, 
+            code: 'TELEGRAM_DISCONNECT_ERROR', 
+            message: error.message 
+        });
+    }
+});
+
+// GET /api/dci/telegram/status - Статус Telegram бота
+app.get('/api/dci/telegram/status', async (req, res) => {
+    try {
+        if (!telegramBot) {
+            return res.json({ 
+                is_connected: false, 
+                message: 'Telegram bot is not initialized' 
+            });
+        }
+
+        const status = telegramBot.getStatus();
+        res.json(status);
+    } catch (error) {
+        console.error('[DCI] Error getting Telegram bot status:', error);
+        res.status(500).json({ 
+            error: true, 
+            code: 'TELEGRAM_STATUS_ERROR', 
+            message: error.message 
+        });
+    }
+});
+
+// POST /api/dci/telegram/send - Отправка сообщения через Telegram бота
+app.post('/api/dci/telegram/send', async (req, res) => {
+    try {
+        const { message, chat_id, parse_mode } = req.body;
+        
+        if (!message) {
+            return res.status(400).json({ 
+                error: true, 
+                code: 'INVALID_PARAMS', 
+                message: 'message is required' 
+            });
+        }
+
+        if (!telegramBot || !telegramBot.isConnected) {
+            return res.status(400).json({ 
+                error: true, 
+                code: 'BOT_NOT_CONNECTED', 
+                message: 'Telegram bot is not connected' 
+            });
+        }
+
+        const options = {};
+        if (parse_mode) {
+            options.parse_mode = parse_mode;
+        }
+
+        const result = await telegramBot.sendMessage(message, chat_id || null, options);
+        res.json({ 
+            success: true, 
+            message_id: result.message_id,
+            chat_id: result.chat.id 
+        });
+    } catch (error) {
+        console.error('[DCI] Error sending Telegram message:', error);
+        res.status(500).json({ 
+            error: true, 
+            code: 'TELEGRAM_SEND_ERROR', 
+            message: error.message 
+        });
     }
 });
 
@@ -414,8 +572,17 @@ async function startServer() {
             PORT = DEFAULT_PORT;
         }
 
-        const server = app.listen(PORT, () => {
+        const server = app.listen(PORT, async () => {
             console.log(`VSS DCI service listening on port ${PORT}`);
+            
+            // Автоматическое подключение Telegram бота при старте (если есть сохраненная конфигурация)
+            if (telegramBot) {
+                try {
+                    await telegramBot.autoConnect();
+                } catch (error) {
+                    console.error('[DCI] Error auto-connecting Telegram bot:', error);
+                }
+            }
             
             // Graceful shutdown
             const { setupGracefulShutdown } = require('../../utils/graceful-shutdown');

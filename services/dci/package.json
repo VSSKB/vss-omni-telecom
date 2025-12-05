@@ -2,6 +2,9 @@
   "name": "vss-dci",
   "version": "1.0.0",
   "description": "VSS DCI Service - Data Control and CI/CD",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -12,7 +15,8 @@
     "pg": "^8.16.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "uuid": "^11.1.0"
-  }
+    "uuid": "^11.1.0",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "devDependencies": {}
 }
-
