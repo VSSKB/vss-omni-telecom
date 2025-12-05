@@ -111,14 +111,14 @@ docker-compose -f docker-compose.vss-demiurge.yml logs -f
 
 | Сервис | URL | Учетные данные |
 |--------|-----|----------------|
-| VSS Workspace | http://localhost:3000 | См. раздел "Управление пользователями" |
-| RabbitMQ Management | http://localhost:15672 | vss-admin / пароль из .env |
-| VSS OTTB API | http://localhost:8083 | JWT токен |
-| VSS DCI API | http://localhost:8082 | JWT токен |
-| VSS POINT API | http://localhost:8081 | JWT токен |
-| Guacamole | http://localhost:8080 | Интеграция с VSS |
-| Prometheus | http://localhost:9090 | - |
-| Grafana | http://localhost:3001 | admin / пароль из .env |
+| VSS Workspace | <http://localhost:3000> | См. раздел "Управление пользователями" |
+| RabbitMQ Management | <http://localhost:15672> | vss-admin / пароль из .env |
+| VSS OTTB API | <http://localhost:8083> | JWT токен |
+| VSS DCI API | <http://localhost:8082> | JWT токен |
+| VSS POINT API | <http://localhost:8081> | JWT токен |
+| Guacamole | <http://localhost:8080> | Интеграция с VSS |
+| Prometheus | <http://localhost:9090> | - |
+| Grafana | <http://localhost:3001> | admin / пароль из .env |
 
 ---
 
@@ -786,10 +786,10 @@ curl -H "Authorization: Bearer <token>" http://localhost:8083/api/autodialer/cam
 
 #### Доступ к метрикам
 
-- VSS OTTB: http://localhost:8083/metrics
-- VSS DCI: http://localhost:8082/metrics
-- VSS POINT: http://localhost:8081/metrics
-- VSS Workspace: http://localhost:3000/metrics
+- VSS OTTB: <http://localhost:8083/metrics>
+- VSS DCI: <http://localhost:8082/metrics>
+- VSS POINT: <http://localhost:8081/metrics>
+- VSS Workspace: <http://localhost:3000/metrics>
 
 #### Просмотр метрик
 
@@ -799,7 +799,7 @@ curl http://localhost:8083/metrics
 
 ### Grafana дашборды
 
-1. Откройте http://localhost:3001
+1. Откройте <http://localhost:3001>
 2. Войдите (admin / пароль из .env)
 3. Импортируйте дашборды из `config/grafana/dashboards/`
 
