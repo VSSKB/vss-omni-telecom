@@ -234,19 +234,40 @@ class TelegramBotManager {
                         }
                     } catch (dbError) {
                         console.error('[Telegram Bot] Database query error:', dbError.message);
-                        dbStatus = `ошибка: ${dbError.message.substring(0, 30)}...`;
+                        // Более понятное сообщение об ошибке
+                        let errorMsg = dbError.message || 'Неизвестная ошибка';
+                        if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('connect')) {
+                            dbStatus = '❌ Недоступна (сервис не запущен)';
+                        } else if (errorMsg.includes('timeout')) {
+                            dbStatus = '⏱️ Таймаут подключения';
+                        } else if (errorMsg.includes('password') || errorMsg.includes('authentication')) {
+                            dbStatus = '❌ Ошибка аутентификации';
+                        } else {
+                            dbStatus = `❌ Ошибка: ${errorMsg.substring(0, 40)}...`;
+                        }
                     }
                 } else {
                     dbStatus = 'не инициализирована';
                 }
 
-                const statusMessage = 
+                let statusMessage = 
                     `📊 *Статус VSS DCI*\n\n` +
-                    `✅ База данных: ${dbStatus}\n` +
+                    `📦 База данных: ${dbStatus}\n` +
                     `🔄 Активных пайплайнов: ${activePipelines}\n` +
                     `⏰ Время сервера: ${serverTime}\n` +
-                    `🤖 Бот: ${this.isConnected ? 'подключен' : 'отключен'}\n` +
-                    `📡 RabbitMQ: ${this.rabbitmqChannel ? 'подключен' : 'не подключен'}`;
+                    `🤖 Бот: ${this.isConnected ? '✅ подключен' : '❌ отключен'}\n` +
+                    `📡 RabbitMQ: ${this.rabbitmqChannel ? '✅ подключен' : '❌ не подключен'}`;
+
+                // Добавляем инструкции, если что-то не работает
+                if (dbStatus.includes('❌') || dbStatus.includes('Недоступна')) {
+                    statusMessage += `\n\n*💡 Для запуска PostgreSQL:*\n`;
+                    statusMessage += `\`docker-compose -f docker-compose.vss-demiurge-simple.yml up -d postgres\``;
+                }
+                
+                if (!this.rabbitmqChannel) {
+                    statusMessage += `\n\n*💡 Для запуска RabbitMQ:*\n`;
+                    statusMessage += `\`docker-compose -f docker-compose.vss-demiurge-simple.yml up -d rabbitmq\``;
+                }
 
                 await this.bot.sendMessage(chatId, statusMessage, { parse_mode: 'Markdown' });
                 this.publishEvent('telegram.command.status', { chat_id: chatId });
@@ -720,7 +741,7 @@ class TelegramBotManager {
                     { name: 'VSS DCI', port: 8082, url: 'http://localhost:8082/health' },
                     { name: 'VSS OTTB', port: 8083, url: 'http://localhost:8083/health' },
                     { name: 'VSS POINT', port: 8081, url: 'http://localhost:8081/health' },
-                    { name: 'VSS Workspace', port: 3000, url: 'http://localhost:3000/health' }
+                    { name: 'VSS Workspace', port: 3000, url: 'http://localhost:3000/' }
                 ];
 
                 let servicesMessage = `🔧 *Статус сервисов VSS*\n\n`;
@@ -728,36 +749,19 @@ class TelegramBotManager {
                 for (const service of services) {
                     try {
                         const http = require('http');
-                        const url = new URL(service.url);
                         
-                        await new Promise((resolve, reject) => {
+                        await new Promise((resolve) => {
                             const req = http.get(service.url, { timeout: 2000 }, (res) => {
+                                // Для Workspace корневой путь возвращает 200, для других - health endpoint
                                 if (res.statusCode === 200) {
                                     servicesMessage += `✅ ${service.name} (${service.port})\n`;
-                                } else if (res.statusCode === 404) {
-                                    // Если 404, проверяем корневой путь - возможно сервис работает, но endpoint другой
-                                    const rootUrl = service.url.replace(/\/health.*$/, '/');
-                                    const rootReq = http.get(rootUrl, { timeout: 1000 }, (rootRes) => {
-                                        if (rootRes.statusCode === 200) {
-                                            servicesMessage += `⚠️ ${service.name} (${service.port}) - работает, но /health недоступен\n`;
-                                        } else {
-                                            servicesMessage += `⚠️ ${service.name} (${service.port}) - код ${res.statusCode}\n`;
-                                        }
-                                        resolve();
-                                    });
-                                    rootReq.on('error', () => {
-                                        servicesMessage += `⚠️ ${service.name} (${service.port}) - код ${res.statusCode}\n`;
-                                        resolve();
-                                    });
-                                    rootReq.on('timeout', () => {
-                                        rootReq.destroy();
-                                        servicesMessage += `⚠️ ${service.name} (${service.port}) - код ${res.statusCode}\n`;
-                                        resolve();
-                                    });
+                                } else if (res.statusCode === 404 && service.name === 'VSS Workspace') {
+                                    // Workspace может не иметь /health, но сервис работает
+                                    servicesMessage += `✅ ${service.name} (${service.port}) - работает\n`;
                                 } else {
                                     servicesMessage += `⚠️ ${service.name} (${service.port}) - код ${res.statusCode}\n`;
-                                    resolve();
                                 }
+                                resolve();
                             });
                             req.on('error', () => {
                                 servicesMessage += `❌ ${service.name} (${service.port}) - недоступен\n`;
