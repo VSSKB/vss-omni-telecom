@@ -2,57 +2,26 @@
   "name": "install-wizard",
   "version": "1.0.0",
   "description": "Web-based installer wizard for Asterisk application.",
-  "homepage": "https://github.com/VSSKB/vss-omni-telecom#readme",
-  "bugs": {
-    "url": "https://github.com/VSSKB/vss-omni-telecom/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/VSSKB/vss-omni-telecom.git"
-  },
-  "license": "ISC",
-  "author": "Your Name",
-  "type": "commonjs",
   "main": "server.js",
-  "directories": {
-    "doc": "docs"
-  },
   "scripts": {
     "start": "node server.js",
-    "start:install-wizard": "node server.js",
-    "start:vss-demiurge": "node back.js",
-    "start:admin-backend": "node admin-backend/server.js",
-    "start:ottb": "node services/ottb/index.js",
-    "start:dci": "node services/dci/index.js",
-    "start:point": "node services/point/index.js",
-    "start:workspace": "node services/workspace/index.js",
-    "start:all": "concurrently -n \"wizard,demiurge,admin,ottb,dci,point,workspace\" -c \"blue,green,yellow,cyan,magenta,red,white\" \"npm run start:install-wizard\" \"npm run start:vss-demiurge\" \"npm run start:admin-backend\" \"npm run start:ottb\" \"npm run start:dci\" \"npm run start:point\" \"npm run start:workspace\"",
-    "start:services": "concurrently -n \"ottb,dci,point,workspace\" -c \"cyan,magenta,red,white\" \"npm run start:ottb\" \"npm run start:dci\" \"npm run start:point\" \"npm run start:workspace\"",
     "audit": "node scripts/run-audit-and-start.js",
     "audit:start": "node scripts/run-audit-and-start.js",
     "test": "node scripts/run-audit-and-start.js"
   },
   "dependencies": {
-    "adbkit": "^2.0.17",
     "amqplib": "^0.10.9",
-    "asterisk-manager": "^0.2.0",
     "axios": "^1.11.0",
     "bcrypt": "^6.0.0",
-    "bcryptjs": "^3.0.3",
     "body-parser": "^1.20.3",
-    "copilot": "^0.0.2",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "find-free-port": "^2.0.0",
-    "joi": "^18.0.2",
-    "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3",
     "socket.io": "^4.8.1",
     "sqlite3": "^5.1.7",
     "uuid": "^11.1.0"
   },
-  "devDependencies": {
-    "concurrently": "^9.2.1"
-  }
+  "author": "Your Name",
+  "license": "ISC"
 }

@@ -1,6 +1,3 @@
-// Load environment variables
-require('dotenv').config();
-
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -51,40 +48,8 @@ function ensureDirectoriesExist() {
     if (!fs.existsSync(backendTemplatePath)) {
         fs.mkdirSync(backendTemplatePath, { recursive: true });
         console.log(`Директория ${backendTemplatePath} создана.`);
-        // Копируем полноценный backend шаблон, если его нет
-        const backendAppPath = path.join(backendTemplatePath, 'app.js');
-        if (!fs.existsSync(backendAppPath)) {
-            // Копируем полноценный backend из шаблона
-            const fullBackendTemplate = path.join(DOCKER_TEMPLATES_DIR, 'backend', 'app.js');
-            if (fs.existsSync(fullBackendTemplate)) {
-                fs.copyFileSync(fullBackendTemplate, backendAppPath);
-            } else {
-                // Fallback: создаем базовый backend
-                const backendTemplate = `const express = require('express'); const app = express(); const PORT = process.env.APP_PORT || 3001; app.use(express.json()); app.get('/', (req, res) => res.json({ message: 'VSS Backend API', port: PORT })); app.listen(PORT, () => console.log(\`Backend running on port \${PORT}\`));`;
-                fs.writeFileSync(backendAppPath, backendTemplate);
-            }
-        }
-        // Создаем полноценный package.json для backend
-        const backendPackageJsonPath = path.join(backendTemplatePath, 'package.json');
-        if (!fs.existsSync(backendPackageJsonPath)) {
-            const backendPackageJson = {
-                "name": "vss-project-backend",
-                "version": "1.0.0",
-                "description": "VSS Project Backend API",
-                "main": "app.js",
-                "scripts": {
-                    "start": "node app.js"
-                },
-                "dependencies": {
-                    "express": "^4.21.2",
-                    "cors": "^2.8.5",
-                    "body-parser": "^1.20.3",
-                    "pg": "^8.16.3",
-                    "bcrypt": "^6.0.0"
-                }
-            };
-            fs.writeFileSync(backendPackageJsonPath, JSON.stringify(backendPackageJson, null, 2));
-        }
+        fs.writeFileSync(path.join(backendTemplatePath, 'app.js'), 'console.log("Backend placeholder is running!");');
+        fs.writeFileSync(path.join(backendTemplatePath, 'package.json'), '{}');
         console.log(`Созданы файлы-заглушки в ${backendTemplatePath}.`);
     }
 
@@ -92,43 +57,7 @@ function ensureDirectoriesExist() {
     if (!fs.existsSync(frontendBuildSourcePath)) {
         fs.mkdirSync(frontendBuildSourcePath, { recursive: true });
         console.log(`Директория ${frontendBuildSourcePath} создана.`);
-            // Создаем полноценный frontend index.html
-            const frontendHtml = `<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VSS Project Frontend</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #1a1a1a;
-            color: #fff;
-        }
-        h1 { color: #4CAF50; }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #2a2a2a;
-            border-radius: 8px;
-        }
-        a { color: #4CAF50; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚀 VSS Project Frontend</h1>
-        <p>Frontend application is running successfully.</p>
-        <p>Backend API: <a href="/api">/api</a></p>
-        <p>Health Check: <a href="/health">/health</a></p>
-    </div>
-</body>
-</html>`;
-            fs.writeFileSync(path.join(frontendBuildSourcePath, 'index.html'), frontendHtml);
+        fs.writeFileSync(path.join(frontendBuildSourcePath, 'index.html'), '<h1>Frontend application placeholder.</h1>');
         console.log(`Создан файл-заглушка в ${frontendBuildSourcePath}.`);
     }
 }
@@ -643,9 +572,7 @@ app.post('/api/generate-project', async (req, res) => {
         } else {
             console.warn(`Внимание: директория сборки фронтенда не найдена: ${frontendBuildSourcePath}. Создаем пустую директорию.`);
             fs.mkdirSync(frontendDestPath, { recursive: true });
-            // Создаем полноценный frontend index.html
-            const frontendHtml = `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>VSS Project Frontend</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#1a1a1a;color:#fff}h1{color:#4CAF50}.container{max-width:800px;margin:0 auto;padding:20px;background:#2a2a2a;border-radius:8px}</style></head><body><div class="container"><h1>🚀 VSS Project Frontend</h1><p>Frontend application is running successfully.</p><p>Backend API: <a href="/api" style="color:#4CAF50">/api</a></p></div></body></html>`;
-            fs.writeFileSync(path.join(frontendDestPath, 'index.html'), frontendHtml);
+            fs.writeFileSync(path.join(frontendDestPath, 'index.html'), '<h1>Frontend application not built.</h1>');
         }
 
         // Копирование backend (исходники)
@@ -655,15 +582,7 @@ app.post('/api/generate-project', async (req, res) => {
         } else {
             console.warn(`Внимание: директория шаблона бэкенда не найдена: ${backendTemplatePath}. Создаем пустую директорию.`);
             fs.mkdirSync(backendDestPath, { recursive: true });
-            // Копируем полноценный backend из шаблона
-            const backendTemplatePath = path.join(DOCKER_TEMPLATES_DIR, 'backend', 'app.js');
-            if (fs.existsSync(backendTemplatePath)) {
-                fs.copyFileSync(backendTemplatePath, path.join(backendDestPath, 'app.js'));
-            } else {
-                // Fallback: создаем базовый backend
-                const basicBackend = `const express = require('express'); const app = express(); const PORT = process.env.APP_PORT || 3001; app.use(express.json()); app.get('/', (req, res) => res.json({ message: 'VSS Backend API', port: PORT })); app.listen(PORT, () => console.log(\`Backend running on port \${PORT}\`));`;
-                fs.writeFileSync(path.join(backendDestPath, 'app.js'), basicBackend);
-            }
+            fs.writeFileSync(path.join(backendDestPath, 'app.js'), 'console.log("Backend placeholder is running!");');
             fs.writeFileSync(path.join(backendDestPath, 'package.json'), '{}');
         }
 
@@ -1820,24 +1739,6 @@ app.post('/api/create-vss-user', async (req, res) => {
 // Маршрут для загрузки отдельной страницы дашборда
 app.get('/dashboard', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
-
-// Маршрут для VSS OTTB Dashboard
-app.get('/ottb', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'vss-ottb-dashboard.html'));
-});
-
-app.get('/vss-ottb', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'vss-ottb-dashboard.html'));
-});
-
-// Маршрут для VSS OTTB Dashboard
-app.get('/ottb', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'vss-ottb-dashboard.html'));
-});
-
-app.get('/vss-ottb', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'vss-ottb-dashboard.html'));
 });
 
 // Функция для проверки доступности порта

@@ -6,33 +6,14 @@ const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const net = require('net');
 const fs = require('fs');
-const { findAvailablePort } = require('../../utils/port-finder');
-const { authenticateToken, optionalAuthenticateToken } = require('../../utils/auth');
-const { loadPermissions, checkPermission } = require('../../utils/rbac');
+const { findAvailablePort, isPortFullyAvailable } = require('../../utils/port-finder');
 require('dotenv').config();
 
 const app = express();
 const DEFAULT_PORT = parseInt(process.env.PORT) || 8083;
 let PORT = DEFAULT_PORT;
 
-// CORS configuration
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS 
-    ? process.env.ALLOWED_ORIGINS.split(',')
-    : ['http://localhost', 'http://127.0.0.1', 'http://79.137.207.215'];
-
-const corsOptions = {
-    origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        if (ALLOWED_ORIGINS.indexOf(origin) !== -1 || ALLOWED_ORIGINS.includes('*')) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true
-};
-
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
 
 // Определяем, запущен ли сервис в Docker или локально
@@ -40,36 +21,9 @@ const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv
 const POSTGRES_HOST = isDocker ? 'postgres' : 'localhost';
 const RABBITMQ_HOST = isDocker ? 'rabbitmq' : 'localhost';
 
-// Database connection with retry logic
-const { createPoolWithRetry, initDatabaseWithRetry } = require('../../utils/db-helper');
-
-const pool = createPoolWithRetry({
-    connectionString: process.env.POSTGRES_URL || `postgresql://vss:vss_postgres_pass@${POSTGRES_HOST}:5432/vss_db`
-}, 'OTTB');
-
-initDatabaseWithRetry(pool, 'OTTB').catch(error => {
-    console.error('[OTTB] ❌ Failed to initialize database.');
-});
-
-// JWT Authentication middleware - загружаем права из БД для всех аутентифицированных запросов
-// Инициализируем ПОСЛЕ создания pool, чтобы избежать ReferenceError
-const loadPermissionsMiddleware = loadPermissions(pool);
-
-app.use((req, res, next) => {
-    // Пропускаем health check
-    if (req.path.startsWith('/health')) {
-        return next();
-    }
-    
-    // Для всех остальных эндпоинтов применяем опциональную аутентификацию
-    optionalAuthenticateToken(req, res, () => {
-        // Если пользователь аутентифицирован, загружаем его права
-        if (req.user && req.user.id) {
-            loadPermissionsMiddleware(req, res, next);
-        } else {
-            next();
-        }
-    });
+// Database connection
+const pool = new Pool({
+    connectionString: process.env.POSTGRES_URL || `postgresql://vss:vss_postgres_pass@${POSTGRES_HOST}:5432/vss_db`,
 });
 
 // RabbitMQ connection
@@ -178,7 +132,7 @@ app.get('/health', (req, res) => {
 // ============================================
 
 // GET /api/slots - Список всех слотов
-app.get('/api/slots', authenticateToken, async (req, res) => {
+app.get('/api/slots', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT s.id, s.slot_number, s.status, s.device_type, s.assigned_user,
@@ -1232,31 +1186,19 @@ try {
 
 // Используем утилиту для поиска свободного порта
 
-// Запуск сервера
+// Запуск сервера с автоматическим поиском свободного порта
 async function startServer() {
     try {
-        if (!isDocker) {
-            try {
-                const availablePort = await findAvailablePort(DEFAULT_PORT, 500);
-                if (availablePort !== DEFAULT_PORT) {
-                    console.log(`[OTTB] ⚠️  Порт ${DEFAULT_PORT} занят. Используется ${availablePort}`);
-                }
-                PORT = availablePort;
-            } catch (portError) {
-                console.error('❌ [OTTB] Не удалось подобрать свободный порт:', portError.message);
-                process.exit(1);
-            }
-        } else {
-            PORT = DEFAULT_PORT;
+        // Пытаемся найти свободный порт (используем утилиту)
+        PORT = await findAvailablePort(DEFAULT_PORT, 100, true);
+        
+        if (PORT !== DEFAULT_PORT) {
+            console.log(`⚠️  [OTTB] Порт ${DEFAULT_PORT} занят. Используется порт ${PORT}`);
         }
-
-        const server = app.listen(PORT, () => {
+        
+        app.listen(PORT, () => {
             console.log(`VSS OTTB Core service listening on port ${PORT}`);
             console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-            
-            // Graceful shutdown
-            const { setupGracefulShutdown } = require('../../utils/graceful-shutdown');
-            setupGracefulShutdown({ server, pool, rabbitmqConnection: global.rabbitmqConnection }, 'OTTB');
         });
     } catch (error) {
         console.error('❌ [OTTB] Ошибка запуска сервера:', error.message);

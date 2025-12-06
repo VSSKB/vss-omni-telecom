@@ -1,0 +1,14 @@
+{
+	"CreatedAt": "2025-11-29T15:46:12Z",
+	"Driver": "local",
+	"Labels": {
+		"com.docker.compose.config-hash": "db7810608dc5f5626995ebd30b0fb317fc909c6f8595ac8814d720fb58f197eb",
+		"com.docker.compose.project": "vss-omni-telecom",
+		"com.docker.compose.version": "2.40.3",
+		"com.docker.compose.volume": "kamailio_run"
+	},
+	"Mountpoint": "/var/lib/docker/volumes/vss-omni-telecom_kamailio_run/_data",
+	"Name": "vss-omni-telecom_kamailio_run",
+	"Options": null,
+	"Scope": "local"
+}

@@ -6,8 +6,10 @@
     <title>VSS DEMIURGE WEB CONTROL</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/vss-architecture-enhanced.css">
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script src="/vss-dashboard-enhanced.js"></script>
+    <script src="/vss-architecture-interactive.js"></script>
     <style>
         :root {
             --vss-primary: #3498db;
@@ -362,6 +364,9 @@
             </div>
         </div>
         
+        <!-- Interactive Architecture Diagram -->
+        <div id="vssArchitectureDiagram"></div>
+        
         <!-- Metrics Grid -->
         <div class="metrics-grid">
             <div class="metric-card blue">
@@ -430,6 +435,19 @@
                     const archontsNav = document.getElementById('nav-archonts');
                     if (archontsNav) {
                         archontsNav.style.display = 'flex';
+                    }
+                    
+                    // Initialize interactive architecture diagram for admin
+                    if (document.getElementById('vssArchitectureDiagram')) {
+                        window.vssArchitecture = new VSSArchitectureDiagram('vssArchitectureDiagram');
+                        window.vssArchitecture.init();
+                        
+                        // Listen for component selection events
+                        window.addEventListener('vss-component-selected', (event) => {
+                            console.log('Component selected:', event.detail);
+                            // Here you can add custom logic when a component is selected
+                            // For example, load specific data or navigate to component details
+                        });
                     }
                 }
                 

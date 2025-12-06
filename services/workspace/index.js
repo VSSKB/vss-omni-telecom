@@ -6,9 +6,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const net = require('net');
 const fs = require('fs');
-const { findAvailablePort } = require('../../utils/port-finder');
-const { authenticateToken, optionalAuthenticateToken } = require('../../utils/auth');
-const { loadPermissions, requirePermission, checkPermission } = require('../../utils/rbac');
+const { findAvailablePort, isPortFullyAvailable } = require('../../utils/port-finder');
 require('dotenv').config();
 
 const app = express();
@@ -23,69 +21,8 @@ const io = new Server(server, {
 const DEFAULT_PORT = parseInt(process.env.PORT) || 3000;
 let PORT = DEFAULT_PORT;
 
-// CORS configuration - only allow specific origins in production
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS 
-    ? process.env.ALLOWED_ORIGINS.split(',')
-    : ['http://localhost', 'http://127.0.0.1', 'http://79.137.207.215'];
-
-const corsOptions = {
-    origin: function (origin, callback) {
-        // Allow requests with no origin (mobile apps, Postman, etc)
-        if (!origin) return callback(null, true);
-        
-        if (ALLOWED_ORIGINS.indexOf(origin) !== -1 || ALLOWED_ORIGINS.includes('*')) {
-            callback(null, true);
-        } else {
-            console.warn(`[WORKSPACE] ⚠️  CORS blocked origin: ${origin}`);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-};
-
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
-
-// Определяем, запущен ли сервис в Docker или локально
-const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
-const RABBITMQ_HOST = isDocker ? 'rabbitmq' : 'localhost';
-const POSTGRES_HOST = isDocker ? 'postgres' : 'localhost';
-
-// Database connection with retry logic
-const { createPoolWithRetry, initDatabaseWithRetry } = require('../../utils/db-helper');
-
-const pool = createPoolWithRetry({
-    connectionString: process.env.POSTGRES_URL || `postgresql://vss:vss_postgres_pass@${POSTGRES_HOST}:5432/vss_db`
-}, 'WORKSPACE');
-
-// Initialize database connection with retry
-initDatabaseWithRetry(pool, 'WORKSPACE').catch(error => {
-    console.error('[WORKSPACE] ❌ Failed to initialize database. Service will start but may not function correctly.');
-    // Don't exit - allow service to start and retry later
-});
-
-// JWT Authentication middleware - загружаем права из БД для всех аутентифицированных запросов
-// Инициализируем ПОСЛЕ создания pool, чтобы избежать ReferenceError
-const loadPermissionsMiddleware = loadPermissions(pool);
-
-app.use((req, res, next) => {
-    // Пропускаем health check и публичные эндпоинты
-    if (req.path.startsWith('/health') || req.path === '/api/auth/login') {
-        return next();
-    }
-    
-    // Для всех остальных эндпоинтов применяем опциональную аутентификацию
-    optionalAuthenticateToken(req, res, () => {
-        // Если пользователь аутентифицирован, загружаем его права
-        if (req.user && req.user.id) {
-            loadPermissionsMiddleware(req, res, next);
-        } else {
-            next();
-        }
-    });
-});
 
 // Health check endpoints
 app.get('/health', (req, res) => {
@@ -108,6 +45,16 @@ app.get('/health/live', (req, res) => {
 
 app.get('/health/startup', (req, res) => {
     res.json({ status: 'started', timestamp: new Date().toISOString() });
+});
+
+// Определяем, запущен ли сервис в Docker или локально
+const isDocker = process.env.DOCKER_ENV === 'true' || fs.existsSync('/.dockerenv');
+const RABBITMQ_HOST = isDocker ? 'rabbitmq' : 'localhost';
+const POSTGRES_HOST = isDocker ? 'postgres' : 'localhost';
+
+// Database connection
+const pool = new Pool({
+    connectionString: process.env.POSTGRES_URL || `postgresql://vss:vss_postgres_pass@${POSTGRES_HOST}:5432/vss_db`,
 });
 
 // RabbitMQ connection
@@ -349,28 +296,8 @@ app.get('/health', (req, res) => {
 // ============================================
 
 // POST /api/crm/note - Добавление заметки
-app.post('/api/crm/note', authenticateToken, async (req, res) => {
+app.post('/api/crm/note', async (req, res) => {
     try {
-        // Проверка прав доступа к созданию заметок
-        if (!req.user.permissions) {
-            const { loadUserPermissions } = require('../../utils/rbac');
-            req.user.permissions = await loadUserPermissions(pool, req.user.id) || {};
-        }
-        
-        const hasNotePermission = req.user.permissions && (
-            checkPermission(req.user.permissions, 'notes.create') ||
-            checkPermission(req.user.permissions, 'crm') ||
-            req.user.permissions.all === true
-        );
-        
-        if (!hasNotePermission) {
-            return res.status(403).json({
-                error: true,
-                code: 'PERMISSION_DENIED',
-                message: 'Permission denied. Required: notes.create'
-            });
-        }
-        
         const { call_id, text } = req.body;
         
         if (!call_id || !text) {
@@ -378,25 +305,11 @@ app.post('/api/crm/note', authenticateToken, async (req, res) => {
         }
         
         // Get call record
-        const callResult = await pool.query('SELECT crm_lead_id, user_id FROM calls WHERE id::text = $1 LIMIT 1', [call_id]);
+        const callResult = await pool.query('SELECT crm_lead_id FROM calls WHERE id::text = $1 LIMIT 1', [call_id]);
         
-        if (callResult.rows.length === 0) {
-            return res.status(404).json({ error: true, code: 'CALL_NOT_FOUND', message: 'Call not found' });
-        }
-        
-        let crmLeadId = callResult.rows[0].crm_lead_id;
-        const callUserId = callResult.rows[0].user_id;
-        
-        // Для продавцов проверяем, что звонок связан с их лидом
-        if (req.user.role === 'seller' && crmLeadId) {
-            const leadCheck = await pool.query('SELECT assigned_seller FROM crm_leads WHERE id = $1', [crmLeadId]);
-            if (leadCheck.rows.length === 0 || leadCheck.rows[0].assigned_seller !== req.user.id) {
-                return res.status(403).json({
-                    error: true,
-                    code: 'PERMISSION_DENIED',
-                    message: 'You can only add notes to your own leads'
-                });
-            }
+        let crmLeadId = null;
+        if (callResult.rows.length > 0 && callResult.rows[0].crm_lead_id) {
+            crmLeadId = callResult.rows[0].crm_lead_id;
         }
         
         // Update CRM lead metadata with note
@@ -409,14 +322,14 @@ app.post('/api/crm/note', authenticateToken, async (req, res) => {
                     COALESCE(metadata->'notes', '[]'::jsonb) || $1::jsonb
                 )
                 WHERE id = $2
-            `, [JSON.stringify([{ text: text, timestamp: new Date().toISOString(), author: req.user.username || req.user.id }]), crmLeadId]);
+            `, [JSON.stringify([{ text: text, timestamp: new Date().toISOString() }]), crmLeadId]);
         }
         
         // Log event
         await pool.query(`
-            INSERT INTO events_log (module, severity, message, context, user_id)
-            VALUES ($1, $2, $3, $4, $5)
-        `, ['WORKSPACE', 'info', 'CRM note added', { call_id: call_id, note: text }, req.user.id]);
+            INSERT INTO events_log (module, severity, message, context)
+            VALUES ($1, $2, $3, $4)
+        `, ['WORKSPACE', 'info', 'CRM note added', { call_id: call_id, note: text }]);
         
         res.json({ status: 'note_added', call_id: call_id });
     } catch (error) {
@@ -450,69 +363,28 @@ app.get('/api/crm/notes/:call_id', async (req, res) => {
         const notes = leadResult.rows[0].metadata?.notes || [];
         res.json({ notes: notes });
     } catch (error) {
-        const { createSafeErrorResponse } = require('../../utils/error-handler');
         console.error('[WORKSPACE] Error fetching CRM notes:', error);
-        res.status(500).json(createSafeErrorResponse(error, 'CRM_NOTES_FETCH_ERROR', 'WORKSPACE'));
+        res.status(500).json({ error: true, code: 'CRM_NOTES_FETCH_ERROR', message: error.message });
     }
 });
 
 // GET /api/crm/leads - Получение лидов
-app.get('/api/crm/leads', authenticateToken, async (req, res) => {
+app.get('/api/crm/leads', async (req, res) => {
     try {
-        // Проверка прав доступа к CRM
-        if (!req.user.permissions) {
-            const { loadUserPermissions } = require('../../utils/rbac');
-            req.user.permissions = await loadUserPermissions(pool, req.user.id) || {};
-        }
-        
-        const hasCrmAccess = req.user.permissions && (
-            checkPermission(req.user.permissions, 'crm.read') ||
-            checkPermission(req.user.permissions, 'crm') ||
-            req.user.permissions.all === true
-        );
-        
-        if (!hasCrmAccess) {
-            return res.status(403).json({
-                error: true,
-                code: 'PERMISSION_DENIED',
-                message: 'Access to CRM denied'
-            });
-        }
-        
         const { status, assigned_seller } = req.query;
         
         let query = 'SELECT * FROM crm_leads WHERE 1=1';
         const params = [];
         let paramIndex = 1;
         
-        // Фильтрация по роли: продавцы видят только свои лиды
-        if (req.user.role === 'seller') {
-            query += ` AND assigned_seller = $${paramIndex++}`;
-            params.push(req.user.id);
-        } else if (req.user.role === 'supervisor') {
-            // Супервизоры должны явно указать assigned_seller или видят только свои данные (если есть)
-            // Для безопасности: если не указан assigned_seller, возвращаем пустой результат
-            // или требуем явного указания продавца
-            if (assigned_seller) {
-                query += ` AND assigned_seller = $${paramIndex++}`;
-                params.push(assigned_seller);
-            } else {
-                // Супервизоры без указания продавца не видят лиды (требуется явное указание)
-                // Это предотвращает случайный просмотр всех лидов
-                query += ` AND 1=0`; // Всегда false - возвращает пустой результат
-            }
-        } else if (req.user.role === 'admin') {
-            // Администраторы могут фильтровать по продавцу или видеть все
-            if (assigned_seller) {
-                query += ` AND assigned_seller = $${paramIndex++}`;
-                params.push(assigned_seller);
-            }
-            // Если не указан assigned_seller, админ видит все лиды
-        }
-        
         if (status) {
             query += ` AND status = $${paramIndex++}`;
             params.push(status);
+        }
+        
+        if (assigned_seller) {
+            query += ` AND assigned_seller = $${paramIndex++}`;
+            params.push(assigned_seller);
         }
         
         query += ' ORDER BY created_at DESC LIMIT 100';
@@ -520,59 +392,8 @@ app.get('/api/crm/leads', authenticateToken, async (req, res) => {
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error) {
-        const { createSafeErrorResponse } = require('../../utils/error-handler');
         console.error('[WORKSPACE] Error fetching CRM leads:', error);
-        res.status(500).json(createSafeErrorResponse(error, 'CRM_LEADS_FETCH_ERROR', 'WORKSPACE'));
-    }
-});
-
-// POST /api/crm/leads - Создание нового лида
-const { validate, createLeadSchema } = require('../../utils/validation');
-app.post('/api/crm/leads', authenticateToken, validate(createLeadSchema, 'body'), async (req, res) => {
-    try {
-        // Проверка прав доступа к CRM
-        if (!req.user.permissions) {
-            const { loadUserPermissions } = require('../../utils/rbac');
-            req.user.permissions = await loadUserPermissions(pool, req.user.id) || {};
-        }
-        
-        const hasCrmWrite = req.user.permissions && (
-            checkPermission(req.user.permissions, 'crm.write') ||
-            checkPermission(req.user.permissions, 'crm') ||
-            req.user.permissions.all === true
-        );
-        
-        if (!hasCrmWrite) {
-            return res.status(403).json({
-                error: true,
-                code: 'PERMISSION_DENIED',
-                message: 'Permission denied. Required: crm.write'
-            });
-        }
-        
-        const { client_name, phone, email, status, source, metadata } = req.body;
-        
-        // Для продавцов автоматически назначаем assigned_seller
-        const assignedSeller = req.user.role === 'seller' ? req.user.id : req.body.assigned_seller || null;
-        
-        const result = await pool.query(`
-            INSERT INTO crm_leads (client_name, phone, email, assigned_seller, status, source, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING *
-        `, [
-            client_name || null,
-            phone || null,
-            email || null,
-            assignedSeller,
-            status || 'new',
-            source || 'manual',
-            metadata || {}
-        ]);
-        
-        res.json({ status: 'created', lead: result.rows[0] });
-    } catch (error) {
-        console.error('[WORKSPACE] Error creating CRM lead:', error);
-        res.status(500).json({ error: true, code: 'CRM_LEAD_CREATE_ERROR', message: error.message });
+        res.status(500).json({ error: true, code: 'CRM_LEADS_FETCH_ERROR', message: error.message });
     }
 });
 
@@ -644,99 +465,43 @@ app.get('/api/notifier/history', async (req, res) => {
 // ============================================
 
 // GET /api/dashboard - Данные дашборда
-app.get('/api/dashboard', authenticateToken, async (req, res) => {
+app.get('/api/dashboard', async (req, res) => {
     try {
-        // Проверка прав доступа к dashboard
-        if (!req.user.permissions) {
-            const { loadUserPermissions } = require('../../utils/rbac');
-            req.user.permissions = await loadUserPermissions(pool, req.user.id) || {};
-        }
-        
-        const hasDashboardAccess = req.user.permissions && (
-            checkPermission(req.user.permissions, 'dashboard') ||
-            checkPermission(req.user.permissions, 'dashboard.read') ||
-            req.user.permissions.read === true ||
-            req.user.permissions.all === true
-        );
-        
-        if (!hasDashboardAccess) {
-            return res.status(403).json({
-                error: true,
-                code: 'PERMISSION_DENIED',
-                message: 'Access to dashboard denied'
-            });
-        }
-        
-        // Get slots summary (супервизоры и администраторы видят все)
-        let slotsQuery = `
+        // Get slots summary
+        const slotsResult = await pool.query(`
             SELECT COUNT(*) as total, 
                    COUNT(CASE WHEN status = 'busy' THEN 1 END) as busy,
                    COUNT(CASE WHEN status = 'free' THEN 1 END) as free,
                    COUNT(CASE WHEN status = 'error' THEN 1 END) as error
             FROM slots
-        `;
-        const slotsResult = await pool.query(slotsQuery);
+        `);
         
         // Get active calls
-        let callsQuery = `
+        const callsResult = await pool.query(`
             SELECT COUNT(*) as active
             FROM calls
             WHERE status IN ('initiated', 'ringing', 'connected')
-        `;
+        `);
         
-        // Для продавцов фильтруем по их лидам
-        if (req.user.role === 'seller') {
-            callsQuery = `
-                SELECT COUNT(*) as active
-                FROM calls c
-                JOIN crm_leads l ON c.crm_lead_id = l.id
-                WHERE c.status IN ('initiated', 'ringing', 'connected')
-                  AND l.assigned_seller = $1
-            `;
-        }
-        const callsResult = await pool.query(callsQuery, req.user.role === 'seller' ? [req.user.id] : []);
+        // Get trunks summary
+        const trunksResult = await pool.query(`
+            SELECT COUNT(*) as total,
+                   COUNT(CASE WHEN status = 'active' THEN 1 END) as online
+            FROM trunks
+        `);
         
-        // Get trunks summary (только для админов и супервизоров)
-        let trunksResult = { rows: [{ total: 0, online: 0 }] };
-        if (req.user.role === 'admin' || req.user.role === 'supervisor') {
-            trunksResult = await pool.query(`
-                SELECT COUNT(*) as total,
-                       COUNT(CASE WHEN status = 'active' THEN 1 END) as online
-                FROM trunks
-            `);
-        }
-        
-        // Get active Guacamole sessions (только для админов и супервизоров)
-        let guacSessionsResult = { rows: [{ active_sessions: 0 }] };
-        if (req.user.role === 'admin' || req.user.role === 'supervisor') {
-            guacSessionsResult = await pool.query(`
-                SELECT COUNT(*) as active_sessions
-                FROM guacamole_sessions_audit
-                WHERE end_time IS NULL
-            `);
-        }
-        
-        // Для продавцов добавляем статистику по их лидам
-        let leadsStats = null;
-        if (req.user.role === 'seller') {
-            const leadsStatsResult = await pool.query(`
-                SELECT 
-                    COUNT(*) as total,
-                    COUNT(CASE WHEN status = 'new' THEN 1 END) as new,
-                    COUNT(CASE WHEN status = 'contacted' THEN 1 END) as contacted,
-                    COUNT(CASE WHEN status = 'converted' THEN 1 END) as converted
-                FROM crm_leads
-                WHERE assigned_seller = $1
-            `, [req.user.id]);
-            leadsStats = leadsStatsResult.rows[0];
-        }
+        // Get active Guacamole sessions
+        const guacSessionsResult = await pool.query(`
+            SELECT COUNT(*) as active_sessions
+            FROM guacamole_sessions_audit
+            WHERE end_time IS NULL
+        `);
         
         res.json({
             slots: slotsResult.rows[0],
             calls: callsResult.rows[0],
             trunks: trunksResult.rows[0],
             guacamole_sessions: guacSessionsResult.rows[0]?.active_sessions || 0,
-            leads: leadsStats,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
@@ -1425,37 +1190,19 @@ io.on('connection', (socket) => {
 // Initialize RabbitMQ on startup
 initRabbitMQ();
 
-// Запуск сервера
+// Запуск сервера с автоматическим поиском свободного порта
 async function startServer() {
     try {
-        // В Docker контейнерах порт фиксирован через переменную окружения
-        // Используем DEFAULT_PORT напрямую
-        if (!isDocker) {
-            try {
-                const availablePort = await findAvailablePort(DEFAULT_PORT, 500);
-                if (availablePort !== DEFAULT_PORT) {
-                    console.log(`[WORKSPACE] ⚠️  Порт ${DEFAULT_PORT} занят. Используется ${availablePort}`);
-                }
-                PORT = availablePort;
-            } catch (portError) {
-                console.error('❌ [WORKSPACE] Не удалось подобрать свободный порт:', portError.message);
-                process.exit(1);
-            }
-        } else {
-            PORT = DEFAULT_PORT;
+        // Пытаемся найти свободный порт (используем утилиту)
+        PORT = await findAvailablePort(DEFAULT_PORT, 100, true);
+        
+        if (PORT !== DEFAULT_PORT) {
+            console.log(`⚠️  [WORKSPACE] Порт ${DEFAULT_PORT} занят. Используется порт ${PORT}`);
         }
-
+        
         server.listen(PORT, () => {
             console.log(`VSS Workspace service listening on port ${PORT}`);
             console.log(`WebSocket server ready`);
-            
-            // Setup graceful shutdown
-            const { setupGracefulShutdown } = require('../../utils/graceful-shutdown');
-            setupGracefulShutdown({
-                server,
-                pool,
-                rabbitmqConnection: global.rabbitmqConnection
-            }, 'WORKSPACE');
         });
     } catch (error) {
         console.error('❌ [WORKSPACE] Ошибка запуска сервера:', error.message);

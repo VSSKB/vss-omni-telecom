@@ -189,14 +189,6 @@ const initRabbitMQ = async () => {
         }
     } catch (error) {
         console.error('[DCI] RabbitMQ connection error:', error.message);
-        console.error('[DCI] RabbitMQ недоступен. Сервис будет работать без RabbitMQ.');
-        console.error('[DCI] Для запуска RabbitMQ выполните: docker run -d --name rabbitmq-local -p 5672:5672 -p 15672:15672 -e RABBITMQ_DEFAULT_USER=vss-admin -e RABBITMQ_DEFAULT_PASS=vss_rabbit_pass -e RABBITMQ_DEFAULT_VHOST=/vss rabbitmq:3.12-management-alpine');
-        
-        // Пытаемся переподключиться через 30 секунд
-        setTimeout(() => {
-            console.log('[DCI] Попытка переподключения к RabbitMQ...');
-            initRabbitMQ();
-        }, 30000);
     }
 };
 
