@@ -22,5 +22,8 @@
     "uuid": "^11.1.0"
   },
   "author": "Your Name",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@flydotio/dockerfile": "^0.7.10"
+  }
 }
