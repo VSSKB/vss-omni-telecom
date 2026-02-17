@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VSS Installation Wizard</title>
     <link rel="stylesheet" href="style.css">
+    <script>
+        // Initialize Vercel Web Analytics
+        (function() {
+            if (typeof window !== 'undefined') {
+                // Dynamic import of Vercel Analytics
+                import('@vercel/analytics').then(function(module) {
+                    if (module.inject) {
+                        module.inject();
+                    }
+                }).catch(function(error) {
+                    console.debug('Vercel Analytics failed to load:', error);
+                });
+            }
+        })();
+    </script>
 </head>
 <body>
     <div class="container">

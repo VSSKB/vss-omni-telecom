@@ -312,7 +312,7 @@ async function loadProjects() {
                         <button onclick="startProject(event, '${project.id}')" class="start-btn" ${project.status === 'running' ? 'disabled' : ''}>Старт</button>
                         <button onclick="stopProject(event, '${project.id}')" class="stop-btn" ${project.status === 'stopped' ? 'disabled' : ''}>Стоп</button>
                         <button onclick="openAdminPanel(event, '${project.id}', ${project.ports.nginx})" class="admin-btn">Перейти в админку</button>
-                        <button onclick="viewProjectLogs(event, '${project.id}')" class="logs-btn">Просмотр логов</button>
+                        <button onclick="viewProjectLogs(event, '${project.id}')" class="logs-btn">Просм��тр логов</button>
                         <button onclick="deleteProject(event, '${project.id}')" class="button-danger">Удалить</button>
                     </div>
                 </div>
