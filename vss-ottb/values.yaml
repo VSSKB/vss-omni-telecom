@@ -1,0 +1,30 @@
+# Параметры деплоя VSS Ecosystem
+replicaCount: 1
+
+image:
+  repository: vss-kb/ottb-engine
+  tag: "1.2.8"
+  pullPolicy: IfNotPresent
+
+# Ресурсы под нагрузку (PJSIP + WebRTC)
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+# Внутренние переменные Демиурга
+config:
+  redisHost: "redis-master.vss-system.svc.cluster.local"
+  logLevel: "DEBUG"
+  enableAiIntent: true  # Gemini 2.5 Flash Integration
+  wsPort: 8080
+
+serviceAccount:
+  create: true
+  name: "vss-archon-sa"
+
+nodeSelector: 
+  role: archon-node # Узлы с доступом к физическим хабам

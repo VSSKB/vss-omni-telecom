@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Build & OS
+dist/
+build/
+*.img
+*.iso
+.DS_Store
+
+# K8s & Helm
+.kube/
+*.tgz
+charts/*/values.lock
+
+# VSS Secrets (CRITICAL)
+.env
+.env.*
+secrets.yaml
+*.pem
+*.key
